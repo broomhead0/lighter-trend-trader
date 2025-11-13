@@ -12,7 +12,7 @@ mean_reversion:
   enabled: true  # Set to true to enable trading
   dry_run: true  # Set to false for live trading (start with true!)
   market: market:2  # SOL market
-  
+
   # Indicator parameters
   ema_fast_period: 8
   ema_slow_period: 21
@@ -21,7 +21,7 @@ mean_reversion:
   rsi_period: 14
   atr_period: 14
   volume_ma_period: 20
-  
+
   # Entry filters
   bb_touch_threshold: 0.95  # Price must be within 95% of Bollinger Band
   rsi_oversold: 30.0  # RSI threshold for long entries
@@ -30,7 +30,7 @@ mean_reversion:
   vol_min_bps: 4.0  # Minimum volatility to trade (avoid dead markets)
   vol_max_bps: 25.0  # Maximum volatility to trade (avoid chaos)
   trend_filter_bps: 15.0  # Max EMA divergence (avoid strong trends)
-  
+
   # Risk management
   take_profit_bps: 3.0  # Target profit in basis points
   stop_loss_bps: 6.0  # Stop loss in basis points

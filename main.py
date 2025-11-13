@@ -13,6 +13,7 @@ import yaml
 from core.state_store import StateStore
 from core.trading_client import TradingClient, TradingConfig
 from modules.mean_reversion_trader import MeanReversionTrader
+from modules.price_feed import PriceFeed
 
 LOG = logging.getLogger("main")
 
@@ -23,7 +24,7 @@ def load_config() -> Dict[str, Any]:
     if not Path(cfg_path).exists():
         LOG.error(f"Config file not found: {cfg_path}")
         sys.exit(1)
-    
+
     with open(cfg_path, "r") as f:
         cfg = yaml.safe_load(f) or {}
     return cfg
@@ -42,12 +43,12 @@ async def main():
     """Main entry point."""
     setup_logging()
     cfg = load_config()
-    
+
     LOG.info("Starting Lighter Trend Trader...")
-    
+
     # Initialize state store
     state = StateStore()
-    
+
     # Initialize trading client if configured
     trading_client: Optional[TradingClient] = None
     api_cfg = cfg.get("api") or {}
@@ -68,13 +69,13 @@ async def main():
             LOG.info("Trading client initialized")
         except Exception as exc:
             LOG.warning(f"Failed to initialize trading client: {exc}")
-    
+
     # Initialize mean reversion trader
     trader_cfg = cfg.get("mean_reversion") or {}
     if not trader_cfg.get("enabled", False):
         LOG.error("Mean reversion trader is not enabled in config")
         sys.exit(1)
-    
+
     try:
         trader = MeanReversionTrader(
             config=cfg,
@@ -87,24 +88,36 @@ async def main():
     except Exception as exc:
         LOG.exception(f"Failed to initialize trader: {exc}")
         sys.exit(1)
-    
+
+    # Initialize price feed to update state with current prices
+    trader_cfg = cfg.get("mean_reversion") or {}
+    market = trader_cfg.get("market", "market:2")
+    price_feed = PriceFeed(
+        config=cfg,
+        state=state,
+        market=market,
+        update_interval=5.0,  # Update every 5 seconds
+    )
+    LOG.info("Price feed initialized")
+
     # Setup graceful shutdown
     stop_event = asyncio.Event()
-    
+
     def signal_handler():
         LOG.info("Shutdown signal received")
         stop_event.set()
-    
+
     loop = asyncio.get_running_loop()
     for s in (signal.SIGINT, signal.SIGTERM):
         try:
             loop.add_signal_handler(s, signal_handler)
         except NotImplementedError:
             pass
-    
-    # Run trader
+
+    # Run trader and price feed
     try:
         await asyncio.gather(
+            price_feed.run(),
             trader.run(),
             stop_event.wait(),
             return_exceptions=True,
@@ -113,6 +126,7 @@ async def main():
         pass
     finally:
         LOG.info("Shutting down...")
+        await price_feed.stop()
         await trader.stop()
         if trading_client:
             try:
