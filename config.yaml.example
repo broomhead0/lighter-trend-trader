@@ -1,0 +1,41 @@
+# Lighter Trend Trader Configuration
+
+api:
+  base_url: https://mainnet.zklighter.elliot.ai
+  key: ""  # Your API key private key (0x...)
+  account_index: 0  # Your account index
+  api_key_index: 0  # Your API key index
+  max_api_key_index: null
+  nonce_management: null  # OPTIMISTIC or CONSERVATIVE
+
+mean_reversion:
+  enabled: true  # Set to true to enable trading
+  dry_run: true  # Set to false for live trading (start with true!)
+  market: market:2  # SOL market
+  
+  # Indicator parameters
+  ema_fast_period: 8
+  ema_slow_period: 21
+  bb_period: 20
+  bb_std: 2.0
+  rsi_period: 14
+  atr_period: 14
+  volume_ma_period: 20
+  
+  # Entry filters
+  bb_touch_threshold: 0.95  # Price must be within 95% of Bollinger Band
+  rsi_oversold: 30.0  # RSI threshold for long entries
+  rsi_overbought: 70.0  # RSI threshold for short entries
+  volume_multiplier: 1.2  # Volume must be 1.2x average
+  vol_min_bps: 4.0  # Minimum volatility to trade (avoid dead markets)
+  vol_max_bps: 25.0  # Maximum volatility to trade (avoid chaos)
+  trend_filter_bps: 15.0  # Max EMA divergence (avoid strong trends)
+  
+  # Risk management
+  take_profit_bps: 3.0  # Target profit in basis points
+  stop_loss_bps: 6.0  # Stop loss in basis points
+  max_hold_minutes: 5  # Maximum time to hold position
+  risk_per_trade_pct: 1.0  # Risk 1% of capital per trade
+  max_position_size: 0.1  # Maximum SOL per trade
+  min_position_size: 0.01  # Minimum SOL per trade
+
