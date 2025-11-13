@@ -72,33 +72,49 @@ class PriceFeed:
                 return None
 
             # Try to get latest candle (most recent close price)
-            url = f"{self.api_base_url.rstrip('/')}/public/markets/{market_id}/candles"
-            params = {
-                "interval": "1m",
-                "limit": 1,  # Just get the latest candle
-            }
+            # Try different endpoint formats
+            urls_to_try = [
+                f"{self.api_base_url.rstrip('/')}/public/markets/{market_id}/candles",
+                f"{self.api_base_url.rstrip('/')}/markets/{market_id}/candles",
+            ]
+            
+            for url in urls_to_try:
+                params = {
+                    "interval": "1m",
+                    "limit": 1,  # Just get the latest candle
+                }
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=5) as resp:
-                    if resp.status != 200:
-                        return None
-                    data = await resp.json()
-                    candles = data.get("candles") if isinstance(data, dict) else data
-
-                    if isinstance(candles, list) and len(candles) > 0:
-                        latest = candles[-1]
-                        close_price = latest.get("close")
-                        if close_price is not None:
-                            return float(close_price)
-
-                    # Fallback: try market stats endpoint if available
-                    stats_url = f"{self.api_base_url.rstrip('/')}/public/markets/{market_id}/stats"
-                    async with session.get(stats_url, timeout=5) as stats_resp:
-                        if stats_resp.status == 200:
-                            stats_data = await stats_resp.json()
-                            mark_price = stats_data.get("mark_price") or stats_data.get("mid")
-                            if mark_price is not None:
-                                return float(mark_price)
+                for url in urls_to_try:
+                    try:
+                        async with session.get(url, params=params, timeout=5) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                candles = data.get("candles") if isinstance(data, dict) else data
+                                
+                                if isinstance(candles, list) and len(candles) > 0:
+                                    latest = candles[-1]
+                                    close_price = latest.get("close")
+                                    if close_price is not None:
+                                        return float(close_price)
+                    except Exception:
+                        continue
+                
+                # Fallback: try market stats endpoint if available
+                stats_urls = [
+                    f"{self.api_base_url.rstrip('/')}/public/markets/{market_id}/stats",
+                    f"{self.api_base_url.rstrip('/')}/markets/{market_id}/stats",
+                ]
+                for stats_url in stats_urls:
+                    try:
+                        async with session.get(stats_url, timeout=5) as stats_resp:
+                            if stats_resp.status == 200:
+                                stats_data = await stats_resp.json()
+                                mark_price = stats_data.get("mark_price") or stats_data.get("mid")
+                                if mark_price is not None:
+                                    return float(mark_price)
+                    except Exception:
+                        continue
 
         except Exception as e:
             LOG.debug(f"[price_feed] fetch error: {e}")
