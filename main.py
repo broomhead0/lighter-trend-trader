@@ -61,6 +61,8 @@ def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
         cfg.setdefault("mean_reversion", {})["dry_run"] = os.environ["MEAN_REVERSION_DRY_RUN"].lower() == "true"
     if os.environ.get("MEAN_REVERSION_MARKET"):
         cfg.setdefault("mean_reversion", {})["market"] = os.environ["MEAN_REVERSION_MARKET"]
+    if os.environ.get("MEAN_REVERSION_CANDLE_INTERVAL_SECONDS"):
+        cfg.setdefault("mean_reversion", {})["candle_interval_seconds"] = int(os.environ["MEAN_REVERSION_CANDLE_INTERVAL_SECONDS"])
 
 
 def setup_logging():
