@@ -21,7 +21,7 @@ LOG = logging.getLogger("main")
 def load_config() -> Dict[str, Any]:
     """Load configuration from YAML file or use defaults."""
     cfg_path = os.environ.get("LIGHTER_CONFIG", "config.yaml")
-    
+
     # If config file doesn't exist, use defaults (Railway uses env vars)
     if not Path(cfg_path).exists():
         LOG.warning(f"Config file not found: {cfg_path}, using defaults from config.yaml.example")
@@ -35,10 +35,10 @@ def load_config() -> Dict[str, Any]:
     else:
         with open(cfg_path, "r") as f:
             cfg = yaml.safe_load(f) or {}
-    
+
     # Apply environment variable overrides (Railway style)
     _apply_env_overrides(cfg)
-    
+
     return cfg
 
 
@@ -53,7 +53,7 @@ def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
         cfg.setdefault("api", {})["account_index"] = int(os.environ["ACCOUNT_INDEX"])
     if os.environ.get("API_KEY_INDEX"):
         cfg.setdefault("api", {})["api_key_index"] = int(os.environ["API_KEY_INDEX"])
-    
+
     # Mean reversion config
     if os.environ.get("MEAN_REVERSION_ENABLED"):
         cfg.setdefault("mean_reversion", {})["enabled"] = os.environ["MEAN_REVERSION_ENABLED"].lower() == "true"
@@ -66,12 +66,12 @@ def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
 def setup_logging():
     """Setup logging configuration."""
     level = os.environ.get("LOG_LEVEL", "INFO").upper()
-    
+
     # Check if running in Railway (or other cloud) - log to stdout only
     is_railway = os.environ.get("RAILWAY_ENVIRONMENT") is not None or os.environ.get("RAILWAY_PROJECT_ID") is not None
-    
+
     handlers = [logging.StreamHandler(sys.stdout)]
-    
+
     # Only log to file if running locally (not Railway)
     if not is_railway:
         log_dir = Path("logs")
@@ -82,7 +82,7 @@ def setup_logging():
         LOG.info(f"Logging to {log_file}")
     else:
         LOG.info("Logging to stdout (Railway/cloud environment)")
-    
+
     # Setup logging
     logging.basicConfig(
         level=level,

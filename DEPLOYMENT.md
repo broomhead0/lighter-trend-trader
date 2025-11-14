@@ -97,11 +97,11 @@ Railway will rebuild and redeploy automatically.
 
 ## Benefits of Railway
 
-✅ **Automatic logging** - No local log files to manage  
-✅ **Auto-restart** - Bot restarts if it crashes  
-✅ **Easy updates** - Push to GitHub, auto-deploys  
-✅ **Monitoring** - Built-in health checks  
-✅ **Free tier** - Good for testing  
+✅ **Automatic logging** - No local log files to manage
+✅ **Auto-restart** - Bot restarts if it crashes
+✅ **Easy updates** - Push to GitHub, auto-deploys
+✅ **Monitoring** - Built-in health checks
+✅ **Free tier** - Good for testing
 
 ## Next Steps
 

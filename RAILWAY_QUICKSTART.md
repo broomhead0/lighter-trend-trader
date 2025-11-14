@@ -52,11 +52,11 @@ MEAN_REVERSION_DRY_RUN=false
 
 ## Benefits
 
-✅ **No local logs** - Everything in Railway dashboard  
-✅ **Auto-restart** - Bot restarts if it crashes  
-✅ **Easy updates** - Push to GitHub, auto-deploys  
-✅ **Free tier** - Good for testing  
-✅ **Monitoring** - Built-in health checks  
+✅ **No local logs** - Everything in Railway dashboard
+✅ **Auto-restart** - Bot restarts if it crashes
+✅ **Easy updates** - Push to GitHub, auto-deploys
+✅ **Free tier** - Good for testing
+✅ **Monitoring** - Built-in health checks
 
 ## That's It!
 
