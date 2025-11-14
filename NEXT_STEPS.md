@@ -70,3 +70,4 @@ When ready for live trading:
 
 **Current Status**: Collecting data, waiting for enough candles to start trading.
 
+

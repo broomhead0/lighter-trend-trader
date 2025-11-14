@@ -57,3 +57,4 @@ Current: 4 bps TP / 8 bps SL = **1:2** (risking 2x to make 1x)
 
 **FIX NEEDED**: Adjust to 8 bps TP / 4 bps SL for proper 2:1 R/R
 
+

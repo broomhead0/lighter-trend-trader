@@ -74,3 +74,4 @@ for t in trades:
 for reason, count in reasons.items():
     print(f"  {reason}: {count}")
 
+

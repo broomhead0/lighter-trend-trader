@@ -13,6 +13,7 @@ import yaml
 from core.state_store import StateStore
 from core.trading_client import TradingClient, TradingConfig
 from modules.mean_reversion_trader import MeanReversionTrader
+from modules.renko_ao_trader import RenkoAOTrader
 from modules.ws_price_feed import WebSocketPriceFeed
 
 LOG = logging.getLogger("main")
@@ -54,7 +55,7 @@ def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
     if os.environ.get("API_KEY_INDEX"):
         cfg.setdefault("api", {})["api_key_index"] = int(os.environ["API_KEY_INDEX"])
 
-    # Mean reversion config
+    # RSI + BB (mean reversion) config
     if os.environ.get("MEAN_REVERSION_ENABLED"):
         cfg.setdefault("mean_reversion", {})["enabled"] = os.environ["MEAN_REVERSION_ENABLED"].lower() == "true"
     if os.environ.get("MEAN_REVERSION_DRY_RUN"):
@@ -63,6 +64,14 @@ def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
         cfg.setdefault("mean_reversion", {})["market"] = os.environ["MEAN_REVERSION_MARKET"]
     if os.environ.get("MEAN_REVERSION_CANDLE_INTERVAL_SECONDS"):
         cfg.setdefault("mean_reversion", {})["candle_interval_seconds"] = int(os.environ["MEAN_REVERSION_CANDLE_INTERVAL_SECONDS"])
+
+    # Renko + AO config
+    if os.environ.get("RENKO_AO_ENABLED"):
+        cfg.setdefault("renko_ao", {})["enabled"] = os.environ["RENKO_AO_ENABLED"].lower() == "true"
+    if os.environ.get("RENKO_AO_DRY_RUN"):
+        cfg.setdefault("renko_ao", {})["dry_run"] = os.environ["RENKO_AO_DRY_RUN"].lower() == "true"
+    if os.environ.get("RENKO_AO_MARKET"):
+        cfg.setdefault("renko_ao", {})["market"] = os.environ["RENKO_AO_MARKET"]
 
 
 def setup_logging():
@@ -98,7 +107,7 @@ async def main():
     setup_logging()
     cfg = load_config()
 
-    LOG.info("Starting Lighter Trend Trader...")
+    LOG.info("Starting Lighter Trend Trader (RSI+BB & Renko+AO strategies)...")
 
     # Initialize state store
     state = StateStore()
@@ -133,34 +142,55 @@ async def main():
         except Exception as exc:
             LOG.warning(f"Failed to initialize trading client: {exc}")
 
-    # Initialize mean reversion trader
-    trader_cfg = cfg.get("mean_reversion") or {}
-    if not trader_cfg.get("enabled", False):
-        LOG.error("Mean reversion trader is not enabled in config")
-        sys.exit(1)
+    # Initialize RSI + BB (mean reversion) trader
+    rsi_bb_trader: Optional[MeanReversionTrader] = None
+    rsi_bb_cfg = cfg.get("mean_reversion") or {}
+    if rsi_bb_cfg.get("enabled", False):
+        try:
+            rsi_bb_trader = MeanReversionTrader(
+                config=cfg,
+                state=state,
+                trading_client=trading_client,
+                alert_manager=None,
+                telemetry=None,
+            )
+            LOG.info("RSI + BB trader initialized")
+        except Exception as exc:
+            LOG.exception(f"Failed to initialize RSI + BB trader: {exc}")
+    else:
+        LOG.info("RSI + BB trader disabled")
 
-    try:
-        trader = MeanReversionTrader(
-            config=cfg,
-            state=state,
-            trading_client=trading_client,
-            alert_manager=None,  # Optional
-            telemetry=None,  # Optional
-        )
-        LOG.info("Mean reversion trader initialized")
-    except Exception as exc:
-        LOG.exception(f"Failed to initialize trader: {exc}")
+    # Initialize Renko + AO trader
+    renko_ao_trader: Optional[RenkoAOTrader] = None
+    renko_ao_cfg = cfg.get("renko_ao") or {}
+    if renko_ao_cfg.get("enabled", False):
+        try:
+            renko_ao_trader = RenkoAOTrader(
+                config=cfg,
+                state=state,
+                trading_client=trading_client,
+                alert_manager=None,
+                telemetry=None,
+            )
+            LOG.info("Renko + AO trader initialized")
+        except Exception as exc:
+            LOG.exception(f"Failed to initialize Renko + AO trader: {exc}")
+    else:
+        LOG.info("Renko + AO trader disabled")
+
+    if not rsi_bb_trader and not renko_ao_trader:
+        LOG.error("No traders enabled! Enable at least one strategy in config.")
         sys.exit(1)
 
     # Initialize WebSocket price feed to update state with current prices
-    trader_cfg = cfg.get("mean_reversion") or {}
-    market = trader_cfg.get("market", "market:2")
+    # Use market from first enabled trader
+    market = rsi_bb_cfg.get("market") or renko_ao_cfg.get("market") or "market:2"
     price_feed = WebSocketPriceFeed(
         config=cfg,
         state=state,
         market=market,
     )
-    LOG.info("WebSocket price feed initialized")
+    LOG.info(f"WebSocket price feed initialized for {market}")
 
     # Setup graceful shutdown
     stop_event = asyncio.Event()
@@ -176,20 +206,25 @@ async def main():
         except NotImplementedError:
             pass
 
-    # Run trader and price feed
+    # Run traders and price feed in parallel
+    tasks = [price_feed.run(), stop_event.wait()]
+    
+    if rsi_bb_trader:
+        tasks.append(rsi_bb_trader.run())
+    if renko_ao_trader:
+        tasks.append(renko_ao_trader.run())
+
     try:
-        await asyncio.gather(
-            price_feed.run(),
-            trader.run(),
-            stop_event.wait(),
-            return_exceptions=True,
-        )
+        await asyncio.gather(*tasks, return_exceptions=True)
     except KeyboardInterrupt:
         pass
     finally:
         LOG.info("Shutting down...")
         await price_feed.stop()
-        await trader.stop()
+        if rsi_bb_trader:
+            await rsi_bb_trader.stop()
+        if renko_ao_trader:
+            await renko_ao_trader.stop()
         if trading_client:
             try:
                 await trading_client.close()

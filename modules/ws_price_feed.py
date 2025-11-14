@@ -202,3 +202,4 @@ class WebSocketPriceFeed:
         """Stop the price feed."""
         self._stop.set()
 
+

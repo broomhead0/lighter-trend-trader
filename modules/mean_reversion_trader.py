@@ -1,6 +1,6 @@
 # modules/mean_reversion_trader.py
 """
-Mean Reversion Trader for SOL on 1-minute timeframe.
+RSI + BB Strategy (Mean Reversion) for SOL.
 
 Strategy:
 - Identifies overextended price moves using Bollinger Bands and RSI

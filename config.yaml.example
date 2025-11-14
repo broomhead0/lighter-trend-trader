@@ -14,8 +14,9 @@ ws:
   url: wss://mainnet.zklighter.elliot.ai/stream  # WebSocket URL for real-time prices
   auth_token: ""  # Optional: WebSocket auth token (if required)
 
+# RSI + BB Strategy (Mean Reversion)
 mean_reversion:
-  enabled: true  # Set to true to enable trading
+  enabled: true  # Set to true to enable RSI + BB strategy
   dry_run: true  # Set to false for live trading (start with true!)
   market: market:2  # SOL market
   candle_interval_seconds: 15  # Candle timeframe: 10s, 15s, 30s, 60s (smaller = faster iteration, more noise)
@@ -42,6 +43,36 @@ mean_reversion:
   take_profit_bps: 8.0  # Target profit in basis points (2:1 risk/reward)
   stop_loss_bps: 4.0  # Stop loss in basis points (tighter stops, but wider than before for 15s noise)
   max_hold_minutes: 3  # Maximum time to hold position (reduced for faster timeframe)
+  risk_per_trade_pct: 1.0  # Risk 1% of capital per trade
+  max_position_size: 0.1  # Maximum SOL per trade
+  min_position_size: 0.01  # Minimum SOL per trade
+
+# Renko + AO Strategy (Divergence)
+renko_ao:
+  enabled: true  # Set to true to enable Renko + AO strategy
+  dry_run: true  # Set to false for live trading (start with true!)
+  market: market:2  # SOL market
+
+  # Renko parameters
+  renko_tick_size: 0.01  # Brick size in price units (1 cent = ~3-tick for $140 SOL)
+  renko_lookback: 20  # Number of bricks to look back for divergence detection
+
+  # Awesome Oscillator parameters
+  ao_fast_period: 5  # Fast SMA period for AO
+  ao_slow_period: 34  # Slow SMA period for AO
+
+  # Bollinger Bands parameters
+  bb_period: 20  # Period for BB calculation
+  bb_std: 2.0  # Standard deviation multiplier for BB
+
+  # Entry filters
+  bb_enhancement_threshold: 0.2  # Within 20% of BB edge for enhanced signal
+  min_divergence_strength: 0.3  # Minimum divergence strength (0.0 to 1.0)
+
+  # Risk management
+  take_profit_bps: 10.0  # Target profit in basis points
+  stop_loss_bps: 5.0  # Stop loss in basis points
+  max_hold_minutes: 5  # Maximum time to hold position
   risk_per_trade_pct: 1.0  # Risk 1% of capital per trade
   max_position_size: 0.1  # Maximum SOL per trade
   min_position_size: 0.01  # Minimum SOL per trade
