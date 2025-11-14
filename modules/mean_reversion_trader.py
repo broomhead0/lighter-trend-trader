@@ -255,29 +255,29 @@ class MeanReversionTrader:
                 if not isinstance(candles_data, list):
                     return
 
-                    # Parse and update candles
-                    new_candles = []
-                    for c in candles_data:
-                        try:
-                            candle = Candle(
-                                open_time=int(c.get("open_time", 0)),
-                                open=float(c.get("open", 0)),
-                                high=float(c.get("high", 0)),
-                                low=float(c.get("low", 0)),
-                                close=float(c.get("close", 0)),
-                                volume=float(c.get("volume", 0)),
-                            )
-                            if candle.open_time > 0:
-                                new_candles.append(candle)
-                        except (ValueError, TypeError):
-                            continue
+                # Parse and update candles
+                new_candles = []
+                for c in candles_data:
+                    try:
+                        candle = Candle(
+                            open_time=int(c.get("open_time", 0)),
+                            open=float(c.get("open", 0)),
+                            high=float(c.get("high", 0)),
+                            low=float(c.get("low", 0)),
+                            close=float(c.get("close", 0)),
+                            volume=float(c.get("volume", 0)),
+                        )
+                        if candle.open_time > 0:
+                            new_candles.append(candle)
+                    except (ValueError, TypeError):
+                        continue
 
-                    if new_candles:
-                        # Sort by time and update
-                        new_candles.sort(key=lambda x: x.open_time)
-                        self._candles.clear()
-                        self._candles.extend(new_candles)
-                        LOG.debug("[mean_reversion] fetched %d candles", len(new_candles))
+                if new_candles:
+                    # Sort by time and update
+                    new_candles.sort(key=lambda x: x.open_time)
+                    self._candles.clear()
+                    self._candles.extend(new_candles)
+                    LOG.debug("[mean_reversion] fetched %d candles", len(new_candles))
 
         except Exception as e:
             LOG.warning("[mean_reversion] error fetching candles: %s", e)
