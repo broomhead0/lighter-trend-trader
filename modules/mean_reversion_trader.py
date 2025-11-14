@@ -30,8 +30,8 @@ LOG = logging.getLogger("mean_reversion")
 
 @dataclass
 class Candle:
-    """1-minute OHLCV candle."""
-    open_time: int  # milliseconds
+    """OHLCV candle (configurable interval)."""
+    open_time: int  # Unix timestamp in seconds
     open: float
     high: float
     low: float
@@ -101,6 +101,7 @@ class MeanReversionTrader:
         # Market
         self.market = trader_cfg.get("market", "market:2")  # SOL
         self.dry_run = bool(trader_cfg.get("dry_run", True))
+        self.candle_interval_seconds = int(trader_cfg.get("candle_interval_seconds", 30))  # Default 30s for faster iteration
 
         # Indicators parameters
         self.ema_fast_period = int(trader_cfg.get("ema_fast_period", 8))
@@ -129,7 +130,7 @@ class MeanReversionTrader:
         self.min_position_size = float(trader_cfg.get("min_position_size", 0.01))  # Min SOL per trade
 
         # Position tracking
-        self._candles: Deque[Candle] = deque(maxlen=100)  # Keep last 100 candles
+        self._candles: Deque[Candle] = deque(maxlen=200)  # Keep last 200 candles (more for smaller timeframes)
         self._current_position: Optional[Dict[str, Any]] = None
         self._open_orders: Dict[int, PlacedOrder] = {}  # client_order_index -> order
         self._stop = asyncio.Event()
@@ -143,14 +144,15 @@ class MeanReversionTrader:
         self.api_base_url = api_cfg.get("base_url", "https://mainnet.zklighter.elliot.ai")
 
         LOG.info(
-            "[mean_reversion] initialized: market=%s dry_run=%s",
+            "[mean_reversion] initialized: market=%s dry_run=%s candle_interval=%ds",
             self.market,
             self.dry_run,
+            self.candle_interval_seconds,
         )
 
     async def run(self):
         """Main trading loop."""
-        LOG.info("[mean_reversion] starting trading loop")
+        LOG.info(f"[mean_reversion] starting trading loop (candle interval: {self.candle_interval_seconds}s)")
 
         # Initial candle fetch
         await self._fetch_candles()

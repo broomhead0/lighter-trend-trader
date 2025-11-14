@@ -18,8 +18,9 @@ mean_reversion:
   enabled: true  # Set to true to enable trading
   dry_run: true  # Set to false for live trading (start with true!)
   market: market:2  # SOL market
+  candle_interval_seconds: 30  # Candle timeframe: 15s, 30s, 60s (smaller = faster iteration, more noise)
 
-  # Indicator parameters
+  # Indicator parameters (scaled for timeframe)
   ema_fast_period: 8
   ema_slow_period: 21
   bb_period: 20
