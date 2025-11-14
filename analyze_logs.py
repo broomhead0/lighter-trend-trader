@@ -15,7 +15,7 @@ from datetime import datetime
 
 def analyze_logs(log_dir="logs", log_file=None):
     """Analyze bot logs and extract key information.
-    
+
     Args:
         log_dir: Directory containing log files (for local logs)
         log_file: Specific log file to analyze (optional)
@@ -45,16 +45,16 @@ def analyze_logs(log_dir="logs", log_file=None):
             print("   railway logs > railway_logs.txt")
             print("   python analyze_logs.py railway_logs.txt")
             return
-    
+
     print(f"Analyzing {len(log_files)} log file(s)...\n")
-    
+
     # Read all lines from all files
     all_lines = []
     for log_file in log_files:
         print(f"Reading {log_file.name}...")
         with open(log_file) as f:
             all_lines.extend(f.readlines())
-    
+
     return _analyze_lines(all_lines, "log files")
 
 
@@ -67,20 +67,20 @@ def _analyze_lines(lines, source_name="logs"):
     entries = []
     exits = []
     errors = []
-    
+
     for line in lines:
         # Price updates
         if "[price_feed]" in line and "price:" in line:
             match = re.search(r"price: ([\d.]+)", line)
             if match:
                 price_updates.append(float(match.group(1)))
-        
+
         # Candle fetches
         if "fetched" in line and "candles" in line:
             match = re.search(r"fetched (\d+) candles", line)
             if match:
                 candle_fetches.append(int(match.group(1)))
-        
+
         # Signals
         if "entering" in line.lower() and "position" in line.lower():
             signals_generated.append(line.strip())
@@ -93,7 +93,7 @@ def _analyze_lines(lines, source_name="logs"):
                     "size": float(match.group(3)),
                     "line": line.strip(),
                 })
-        
+
         # Exits
         if "exiting position" in line.lower():
             match = re.search(r"exiting position.*entry=([\d.]+).*reason=(\w+)", line)
@@ -103,7 +103,7 @@ def _analyze_lines(lines, source_name="logs"):
                     "reason": match.group(2),
                     "line": line.strip(),
                 })
-        
+
         # Errors
         if "[ERROR]" in line or "Exception" in line or "Traceback" in line:
             errors.append(line.strip())

@@ -13,7 +13,7 @@ import yaml
 from core.state_store import StateStore
 from core.trading_client import TradingClient, TradingConfig
 from modules.mean_reversion_trader import MeanReversionTrader
-from modules.price_feed import PriceFeed
+from modules.ws_price_feed import WebSocketPriceFeed
 
 LOG = logging.getLogger("main")
 
@@ -150,16 +150,15 @@ async def main():
         LOG.exception(f"Failed to initialize trader: {exc}")
         sys.exit(1)
 
-    # Initialize price feed to update state with current prices
+    # Initialize WebSocket price feed to update state with current prices
     trader_cfg = cfg.get("mean_reversion") or {}
     market = trader_cfg.get("market", "market:2")
-    price_feed = PriceFeed(
+    price_feed = WebSocketPriceFeed(
         config=cfg,
         state=state,
         market=market,
-        update_interval=5.0,  # Update every 5 seconds
     )
-    LOG.info("Price feed initialized")
+    LOG.info("WebSocket price feed initialized")
 
     # Setup graceful shutdown
     stop_event = asyncio.Event()

@@ -10,6 +10,10 @@ api:
   max_api_key_index: null
   nonce_management: null  # OPTIMISTIC or CONSERVATIVE
 
+ws:
+  url: wss://mainnet.zklighter.elliot.ai/stream  # WebSocket URL for real-time prices
+  auth_token: ""  # Optional: WebSocket auth token (if required)
+
 mean_reversion:
   enabled: true  # Set to true to enable trading
   dry_run: true  # Set to false for live trading (start with true!)
