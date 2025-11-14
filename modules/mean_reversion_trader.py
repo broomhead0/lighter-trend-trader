@@ -571,8 +571,12 @@ class MeanReversionTrader:
         if side == "short" and price <= take_profit:
             return "take_profit"
 
-        # Time stop
-        if time.time() - entry_time > self.max_hold_minutes * 60:
+        # Time stop (scale by candle interval for smaller timeframes)
+        max_hold_seconds = self.max_hold_minutes * 60
+        # For smaller timeframes, scale down hold time proportionally
+        if self.candle_interval_seconds < 60:
+            max_hold_seconds = max_hold_seconds * (self.candle_interval_seconds / 60)
+        if time.time() - entry_time > max_hold_seconds:
             return "time_stop"
 
         # Reversal signal (opposite of entry)
