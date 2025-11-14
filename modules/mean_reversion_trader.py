@@ -575,12 +575,14 @@ class MeanReversionTrader:
 
     async def _enter_position(self, signal: Signal) -> None:
         """Enter a position based on signal."""
-        if not self.trading_client:
+        # In dry-run mode, we can simulate without trading client
+        if not self.trading_client and not self.dry_run:
             LOG.warning("[mean_reversion] no trading client, cannot enter position")
             return
 
         try:
-            await self.trading_client.ensure_ready()
+            if self.trading_client:
+                await self.trading_client.ensure_ready()
 
             # Determine order side
             order_side = "bid" if signal.side == "long" else "ask"
@@ -652,12 +654,13 @@ class MeanReversionTrader:
             reason,
         )
 
-        if not self.trading_client:
+        if not self.trading_client and not self.dry_run:
             self._current_position = None
             return
 
         try:
-            await self.trading_client.ensure_ready()
+            if self.trading_client:
+                await self.trading_client.ensure_ready()
 
             # Determine exit side (opposite of entry)
             exit_side = "ask" if pos["side"] == "long" else "bid"
