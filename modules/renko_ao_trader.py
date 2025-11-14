@@ -131,9 +131,7 @@ class RenkoAOTrader:
         # State
         self._renko_bricks: Deque[RenkoBrick] = deque(maxlen=200)
         self._current_brick: Optional[RenkoBrick] = None
-        self._price_history: Deque[float] = deque(maxlen=1000)  # For AO calculation
-        self._price_highs: Deque[float] = deque(maxlen=1000)  # For ATR calculation
-        self._price_lows: Deque[float] = deque(maxlen=1000)  # For ATR calculation
+        self._price_history: Deque[float] = deque(maxlen=1000)  # For ATR and AO calculation
         self._current_position: Optional[Dict[str, Any]] = None
         self._open_orders: Dict[int, PlacedOrder] = {}
         self._stop = asyncio.Event()
@@ -157,19 +155,7 @@ class RenkoAOTrader:
                     continue
 
                 # Update price history for ATR calculation
-                # Track price with timestamp for ATR
                 self._price_history.append(current_price)
-                # For ATR, we'll use price changes (since we only have mid prices)
-                # Track high/low as the price itself (will be updated if we get better data)
-                if len(self._price_highs) == 0 or current_price > self._price_highs[-1]:
-                    self._price_highs.append(current_price)
-                else:
-                    self._price_highs.append(self._price_highs[-1] if self._price_highs else current_price)
-                
-                if len(self._price_lows) == 0 or current_price < self._price_lows[-1]:
-                    self._price_lows.append(current_price)
-                else:
-                    self._price_lows.append(self._price_lows[-1] if self._price_lows else current_price)
 
                 # Calculate ATR and update Renko brick size
                 atr = self._calculate_atr()
