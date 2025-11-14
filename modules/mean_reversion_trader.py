@@ -101,7 +101,7 @@ class MeanReversionTrader:
         # Market
         self.market = trader_cfg.get("market", "market:2")  # SOL
         self.dry_run = bool(trader_cfg.get("dry_run", True))
-        self.candle_interval_seconds = int(trader_cfg.get("candle_interval_seconds", 30))  # Default 30s for faster iteration
+        self.candle_interval_seconds = int(trader_cfg.get("candle_interval_seconds", 15))  # Default 15s for fastest iteration
 
         # Indicators parameters
         self.ema_fast_period = int(trader_cfg.get("ema_fast_period", 8))
@@ -233,13 +233,14 @@ class MeanReversionTrader:
 
             # Map seconds to interval string
             interval_map = {
+                10: "10s",
                 15: "15s",
                 30: "30s", 
                 60: "1m",
                 300: "5m",
             }
-            interval_str = interval_map.get(self.candle_interval_seconds, "1m")
-            
+            interval_str = interval_map.get(self.candle_interval_seconds, "15s")
+
             params = {
                 "interval": interval_str,
                 "limit": 100,  # Get last 100 candles
