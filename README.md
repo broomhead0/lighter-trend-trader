@@ -21,7 +21,30 @@ The bot uses a **mean reversion strategy** that:
 
 ## Quick Start
 
-### Installation
+### Option 1: Deploy to Railway (Recommended)
+
+**Easiest way - automatic logging, auto-restart, no local setup needed!**
+
+1. **Connect to Railway:**
+   - Go to https://railway.app
+   - Sign in with GitHub
+   - New Project → Deploy from GitHub
+   - Select `lighter-trend-trader` repo
+
+2. **Set Environment Variables:**
+   - `MEAN_REVERSION_ENABLED=true`
+   - `MEAN_REVERSION_DRY_RUN=true` (for testing)
+   - `MEAN_REVERSION_MARKET=market:2`
+   - See `railway.env.example` for full list
+
+3. **Deploy:**
+   - Railway auto-detects Dockerfile
+   - Builds and deploys automatically
+   - View logs in Railway dashboard
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
+
+### Option 2: Local Development
 
 ```bash
 # Clone the repository
@@ -34,34 +57,33 @@ source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Copy config
+cp config.yaml.example config.yaml
+
+# Edit config.yaml (see Configuration section)
+
+# Run
+export PYTHONPATH=.
+python main.py
 ```
 
 ### Configuration
 
-1. Copy the example config:
-```bash
-cp config.yaml.example config.yaml
-```
+**⚠️ IMPORTANT:** Use a DIFFERENT account than your market maker bot! See [ACCOUNT_SETUP.md](ACCOUNT_SETUP.md).
 
-2. Edit `config.yaml`:
+Edit `config.yaml`:
 ```yaml
 api:
   base_url: https://mainnet.zklighter.elliot.ai
-  key: YOUR_API_KEY_PRIVATE_KEY
-  account_index: YOUR_ACCOUNT_INDEX
+  key: YOUR_DIFFERENT_API_KEY_PRIVATE_KEY  # Different from market maker!
+  account_index: YOUR_DIFFERENT_ACCOUNT_INDEX  # Different from market maker!
   api_key_index: YOUR_API_KEY_INDEX
 
 mean_reversion:
   enabled: true
   dry_run: true  # Start with dry_run=true for testing
   market: market:2  # SOL market
-```
-
-### Run
-
-```bash
-export PYTHONPATH=.
-python -m main
 ```
 
 ## Strategy Details

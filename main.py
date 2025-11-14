@@ -19,15 +19,48 @@ LOG = logging.getLogger("main")
 
 
 def load_config() -> Dict[str, Any]:
-    """Load configuration from YAML file."""
+    """Load configuration from YAML file or use defaults."""
     cfg_path = os.environ.get("LIGHTER_CONFIG", "config.yaml")
+    
+    # If config file doesn't exist, use defaults (Railway uses env vars)
     if not Path(cfg_path).exists():
-        LOG.error(f"Config file not found: {cfg_path}")
-        sys.exit(1)
-
-    with open(cfg_path, "r") as f:
-        cfg = yaml.safe_load(f) or {}
+        LOG.warning(f"Config file not found: {cfg_path}, using defaults from config.yaml.example")
+        # Try to load from example, or use empty dict (env vars will override)
+        example_path = "config.yaml.example"
+        if Path(example_path).exists():
+            with open(example_path, "r") as f:
+                cfg = yaml.safe_load(f) or {}
+        else:
+            cfg = {}
+    else:
+        with open(cfg_path, "r") as f:
+            cfg = yaml.safe_load(f) or {}
+    
+    # Apply environment variable overrides (Railway style)
+    _apply_env_overrides(cfg)
+    
     return cfg
+
+
+def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
+    """Apply environment variable overrides to config."""
+    # API config
+    if os.environ.get("API_BASE_URL"):
+        cfg.setdefault("api", {})["base_url"] = os.environ["API_BASE_URL"]
+    if os.environ.get("API_KEY_PRIVATE_KEY"):
+        cfg.setdefault("api", {})["key"] = os.environ["API_KEY_PRIVATE_KEY"]
+    if os.environ.get("ACCOUNT_INDEX"):
+        cfg.setdefault("api", {})["account_index"] = int(os.environ["ACCOUNT_INDEX"])
+    if os.environ.get("API_KEY_INDEX"):
+        cfg.setdefault("api", {})["api_key_index"] = int(os.environ["API_KEY_INDEX"])
+    
+    # Mean reversion config
+    if os.environ.get("MEAN_REVERSION_ENABLED"):
+        cfg.setdefault("mean_reversion", {})["enabled"] = os.environ["MEAN_REVERSION_ENABLED"].lower() == "true"
+    if os.environ.get("MEAN_REVERSION_DRY_RUN"):
+        cfg.setdefault("mean_reversion", {})["dry_run"] = os.environ["MEAN_REVERSION_DRY_RUN"].lower() == "true"
+    if os.environ.get("MEAN_REVERSION_MARKET"):
+        cfg.setdefault("mean_reversion", {})["market"] = os.environ["MEAN_REVERSION_MARKET"]
 
 
 def setup_logging():
