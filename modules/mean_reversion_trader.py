@@ -229,8 +229,17 @@ class MeanReversionTrader:
                 f"{self.api_base_url.rstrip('/')}/markets/{market_id}/candles",
             ]
 
+            # Map seconds to interval string
+            interval_map = {
+                15: "15s",
+                30: "30s", 
+                60: "1m",
+                300: "5m",
+            }
+            interval_str = interval_map.get(self.candle_interval_seconds, "1m")
+            
             params = {
-                "interval": "1m",
+                "interval": interval_str,
                 "limit": 100,  # Get last 100 candles
             }
 
@@ -297,19 +306,20 @@ class MeanReversionTrader:
         return None
 
     async def _build_candles_from_price(self):
-        """Build 1-minute candles from WebSocket price updates."""
+        """Build candles from WebSocket price updates."""
         price = self._get_current_price()
         if price is None:
             return
 
         now = time.time()
-        current_minute = int(now // 60) * 60  # Round to minute
+        # Round to candle interval (e.g., 30s, 60s)
+        current_candle_time = int(now // self.candle_interval_seconds) * self.candle_interval_seconds
 
         # Get or create current candle
-        if not self._candles or self._candles[-1].open_time < current_minute:
-            # New minute - create new candle
+        if not self._candles or self._candles[-1].open_time < current_candle_time:
+            # New candle period - create new candle
             new_candle = Candle(
-                open_time=current_minute,
+                open_time=current_candle_time,
                 open=price,
                 high=price,
                 low=price,
@@ -317,10 +327,10 @@ class MeanReversionTrader:
                 volume=0.0,  # Volume not available from WS
             )
             self._candles.append(new_candle)
-            # Keep only last 100 candles
-            if len(self._candles) > 100:
-                self._candles = self._candles[-100:]
-            LOG.info(f"[mean_reversion] created new candle at {current_minute}, price={price:.2f}, total candles: {len(self._candles)}")
+            # Keep only last 200 candles (more for smaller timeframes)
+            if len(self._candles) > 200:
+                self._candles = self._candles[-200:]
+            LOG.info(f"[mean_reversion] created new candle at {current_candle_time} ({self.candle_interval_seconds}s), price={price:.2f}, total candles: {len(self._candles)}")
         else:
             # Update current candle
             current_candle = self._candles[-1]
