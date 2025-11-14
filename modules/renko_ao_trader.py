@@ -216,10 +216,11 @@ class RenkoAOTrader:
             return None
 
         # Calculate True Range for each period
+        # Since we get mid prices, use price as both high and low (reasonable approximation)
         true_ranges = []
-        for i in range(len(self._price_history) - self.renko_atr_period, len(self._price_history)):
-            if i == 0:
-                continue
+        for i in range(1, len(self._price_history)):
+            if i >= len(self._price_history):
+                break
             high = self._price_highs[i] if i < len(self._price_highs) else self._price_history[i]
             low = self._price_lows[i] if i < len(self._price_lows) else self._price_history[i]
             prev_close = self._price_history[i - 1]
@@ -230,11 +231,12 @@ class RenkoAOTrader:
             true_range = max(tr1, tr2, tr3)
             true_ranges.append(true_range)
 
-        if not true_ranges:
+        if not true_ranges or len(true_ranges) < self.renko_atr_period:
             return None
 
-        # ATR is the average of True Ranges
-        atr = sum(true_ranges) / len(true_ranges)
+        # ATR is the average of the last N True Ranges
+        recent_trs = true_ranges[-self.renko_atr_period:]
+        atr = sum(recent_trs) / len(recent_trs)
         return atr
 
     def _update_renko(self, price: float) -> None:
