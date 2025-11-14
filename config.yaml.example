@@ -14,7 +14,7 @@ ws:
   url: wss://mainnet.zklighter.elliot.ai/stream  # WebSocket URL for real-time prices
   auth_token: ""  # Optional: WebSocket auth token (if required)
 
-# RSI + BB Strategy (Mean Reversion)
+# RSI + BB Strategy (Trend Following)
 mean_reversion:
   enabled: true  # Set to true to enable RSI + BB strategy
   dry_run: true  # Set to false for live trading (start with true!)
@@ -30,14 +30,15 @@ mean_reversion:
   atr_period: 14
   volume_ma_period: 20
 
-  # Entry filters (optimized based on overnight data)
-  bb_touch_threshold: 0.98  # Price must be within 98% of Bollinger Band (tighter - only extreme moves)
-  rsi_oversold: 25.0  # RSI threshold for long entries (more extreme = better entries)
-  rsi_overbought: 75.0  # RSI threshold for short entries (more extreme = better entries)
+  # Entry filters (trend following - trades WITH the trend)
+  rsi_bullish_threshold: 50.0  # RSI threshold for long entries (RSI > 50 = bullish momentum)
+  rsi_bearish_threshold: 50.0  # RSI threshold for short entries (RSI < 50 = bearish momentum)
+  rsi_momentum_strength: 10.0  # RSI must be at least this far from 50 (e.g., RSI > 60 for strong bullish)
+  bb_position_threshold: 0.3  # Price must be within 30% of BB middle (not at extremes)
   volume_multiplier: 1.2  # Volume must be 1.2x average
-  vol_min_bps: 2.0  # Minimum volatility to trade (lowered to allow trades in low vol periods)
+  vol_min_bps: 2.0  # Minimum volatility to trade
   vol_max_bps: 25.0  # Maximum volatility to trade (avoid chaos)
-  trend_filter_bps: 15.0  # Max EMA divergence (avoid strong trends)
+  trend_confirmation_bps: 2.0  # Min EMA divergence for trend confirmation (EMA fast > EMA slow)
 
   # Risk management (optimized for 15s timeframe - 2:1 R/R)
   take_profit_bps: 8.0  # Target profit in basis points (2:1 risk/reward)

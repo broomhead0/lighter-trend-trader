@@ -1,15 +1,16 @@
 # modules/mean_reversion_trader.py
 """
-RSI + BB Strategy (Mean Reversion) for SOL.
+RSI + BB Strategy (Trend Following) for SOL.
 
 Strategy:
-- Identifies overextended price moves using Bollinger Bands and RSI
-- Filters trades by volatility (moderate vol only - avoid extreme conditions)
-- Uses volume confirmation for entry signals
-- Quick entries/exits (target 2-5 bps profit, stop at 4-8 bps loss)
+- Trades WITH the trend using RSI momentum and Bollinger Bands
+- Long entries: RSI > 50 (bullish momentum) + price near/above BB middle
+- Short entries: RSI < 50 (bearish momentum) + price near/below BB middle
+- Uses BB as support/resistance for trend continuation
+- Filters trades by volatility (moderate vol only)
 - Position sizing based on ATR (volatility-adjusted)
 
-This strategy works best in ranging/choppy markets and avoids strong trends.
+This strategy works best in trending markets and follows momentum.
 """
 
 from __future__ import annotations
@@ -67,19 +68,20 @@ class Signal:
 
 class MeanReversionTrader:
     """
-    Mean reversion trader that identifies overextended moves and trades reversions.
+    Trend following trader using RSI momentum and Bollinger Bands.
 
     Entry conditions:
-    - Price touches/extends beyond Bollinger Band (overextended)
-    - RSI confirms (oversold < 30 for long, overbought > 70 for short)
+    - Long: RSI > 50 (bullish momentum) + price near/above BB middle
+    - Short: RSI < 50 (bearish momentum) + price near/below BB middle
     - Volume is above average (confirmation)
     - Volatility is moderate (not too high, not too low)
-    - No strong trend (EMA fast/slow not diverging too much)
+    - Trend confirmation (EMA fast > EMA slow for longs, vice versa for shorts)
 
     Exit conditions:
-    - Take profit: price returns to EMA or target bps
-    - Stop loss: price continues against us beyond threshold
+    - Take profit: price reaches target bps
+    - Stop loss: price reverses beyond threshold
     - Time stop: exit after max hold time if no movement
+    - Trend reversal: RSI crosses opposite direction
     """
 
     def __init__(
@@ -112,14 +114,15 @@ class MeanReversionTrader:
         self.atr_period = int(trader_cfg.get("atr_period", 14))
         self.volume_ma_period = int(trader_cfg.get("volume_ma_period", 20))
 
-        # Entry filters
-        self.bb_touch_threshold = float(trader_cfg.get("bb_touch_threshold", 0.95))  # 95% to band
-        self.rsi_oversold = float(trader_cfg.get("rsi_oversold", 30.0))
-        self.rsi_overbought = float(trader_cfg.get("rsi_overbought", 70.0))
+        # Entry filters (trend following)
+        self.rsi_bullish_threshold = float(trader_cfg.get("rsi_bullish_threshold", 50.0))  # RSI > 50 for longs
+        self.rsi_bearish_threshold = float(trader_cfg.get("rsi_bearish_threshold", 50.0))  # RSI < 50 for shorts
+        self.rsi_momentum_strength = float(trader_cfg.get("rsi_momentum_strength", 10.0))  # RSI must be at least this far from 50
+        self.bb_position_threshold = float(trader_cfg.get("bb_position_threshold", 0.3))  # Price within 30% of BB middle
         self.volume_multiplier = float(trader_cfg.get("volume_multiplier", 1.2))  # Volume must be 1.2x average
-        self.vol_min_bps = float(trader_cfg.get("vol_min_bps", 4.0))  # Minimum volatility to trade
+        self.vol_min_bps = float(trader_cfg.get("vol_min_bps", 2.0))  # Minimum volatility to trade
         self.vol_max_bps = float(trader_cfg.get("vol_max_bps", 25.0))  # Maximum volatility to trade
-        self.trend_filter_bps = float(trader_cfg.get("trend_filter_bps", 15.0))  # Max EMA divergence
+        self.trend_confirmation_bps = float(trader_cfg.get("trend_confirmation_bps", 2.0))  # Min EMA divergence for trend confirmation
 
         # Risk management
         self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 3.0))
@@ -485,16 +488,11 @@ class MeanReversionTrader:
     # ------------------------- Signal Generation -------------------------
 
     def _check_entry(self, price: float, indicators: Indicators) -> Optional[Signal]:
-        """Check for entry signals."""
+        """Check for entry signals (trend following)."""
         # Volatility filter
         if indicators.volatility_bps < self.vol_min_bps or indicators.volatility_bps > self.vol_max_bps:
-            LOG.info(f"[mean_reversion] volatility filter: {indicators.volatility_bps:.1f} bps (need {self.vol_min_bps}-{self.vol_max_bps})")
+            LOG.debug(f"[mean_reversion] volatility filter: {indicators.volatility_bps:.1f} bps (need {self.vol_min_bps}-{self.vol_max_bps})")
             return None
-
-        # Trend filter - avoid strong trends
-        ema_diff_bps = abs(indicators.ema_fast - indicators.ema_slow) / indicators.ema_slow * 10000
-        if ema_diff_bps > self.trend_filter_bps:
-            return None  # Strong trend, skip
 
         # Volume filter (skip if volume is 0 - we don't have volume from WS)
         latest_candle = self._candles[-1] if self._candles else None
@@ -502,27 +500,34 @@ class MeanReversionTrader:
             LOG.debug(f"[mean_reversion] volume filter: {latest_candle.volume:.0f} < {indicators.volume_ma * self.volume_multiplier:.0f}")
             return None
 
-        # Long signal: price near lower BB, RSI oversold
-        bb_position_long = (price - indicators.bb_lower) / (indicators.bb_middle - indicators.bb_lower) if indicators.bb_middle > indicators.bb_lower else 1.0
-        bb_touch_long = bb_position_long <= (1.0 - self.bb_touch_threshold)
-        rsi_oversold_check = indicators.rsi < self.rsi_oversold
-        if bb_touch_long and rsi_oversold_check:
-            strength = (self.rsi_oversold - indicators.rsi) / self.rsi_oversold
-            LOG.info(f"[mean_reversion] LONG signal: RSI={indicators.rsi:.1f} (need <{self.rsi_oversold}), BB_pos={bb_position_long:.3f} (need <{1.0 - self.bb_touch_threshold:.3f}), price={price:.2f}, BB_lower={indicators.bb_lower:.2f}")
-            return self._create_signal("long", price, indicators, strength, "BB lower + RSI oversold")
-        elif rsi_oversold_check and not bb_touch_long:
-            LOG.debug(f"[mean_reversion] RSI oversold but BB not touched: RSI={indicators.rsi:.1f}, BB_pos={bb_position_long:.3f}, price={price:.2f}, BB_lower={indicators.bb_lower:.2f}")
+        # Calculate price position relative to BB middle (0.0 = at lower BB, 1.0 = at upper BB, 0.5 = at middle)
+        if indicators.bb_upper > indicators.bb_lower:
+            bb_position = (price - indicators.bb_lower) / (indicators.bb_upper - indicators.bb_lower)
+        else:
+            bb_position = 0.5
 
-        # Short signal: price near upper BB, RSI overbought
-        bb_position_short = (price - indicators.bb_middle) / (indicators.bb_upper - indicators.bb_middle) if indicators.bb_upper > indicators.bb_middle else 1.0
-        bb_touch_short = bb_position_short >= self.bb_touch_threshold
-        rsi_overbought_check = indicators.rsi > self.rsi_overbought
-        if bb_touch_short and rsi_overbought_check:
-            strength = (indicators.rsi - self.rsi_overbought) / (100 - self.rsi_overbought)
-            LOG.info(f"[mean_reversion] SHORT signal: RSI={indicators.rsi:.1f} (need >{self.rsi_overbought}), BB_pos={bb_position_short:.3f} (need >={self.bb_touch_threshold:.3f}), price={price:.2f}, BB_upper={indicators.bb_upper:.2f}")
-            return self._create_signal("short", price, indicators, strength, "BB upper + RSI overbought")
-        elif rsi_overbought_check and not bb_touch_short:
-            LOG.debug(f"[mean_reversion] RSI overbought but BB not touched: RSI={indicators.rsi:.1f}, BB_pos={bb_position_short:.3f}, price={price:.2f}, BB_upper={indicators.bb_upper:.2f}")
+        # Long signal: RSI > 50 (bullish momentum) + price near/above BB middle + EMA trend confirmation
+        rsi_bullish = indicators.rsi > (self.rsi_bullish_threshold + self.rsi_momentum_strength)
+        price_above_middle = bb_position >= (0.5 - self.bb_position_threshold)  # Within threshold of middle or above
+        ema_bullish = indicators.ema_fast > indicators.ema_slow
+        ema_trend_strength = abs(indicators.ema_fast - indicators.ema_slow) / indicators.ema_slow * 10000
+        trend_confirmed = ema_trend_strength >= self.trend_confirmation_bps
+
+        if rsi_bullish and price_above_middle and ema_bullish and trend_confirmed:
+            strength = min(1.0, (indicators.rsi - self.rsi_bullish_threshold) / 50.0)  # Strength based on RSI above 50
+            LOG.info(f"[mean_reversion] LONG signal (trend following): RSI={indicators.rsi:.1f} (need >{self.rsi_bullish_threshold + self.rsi_momentum_strength:.1f}), BB_pos={bb_position:.2f}, EMA_fast={indicators.ema_fast:.2f} > EMA_slow={indicators.ema_slow:.2f}, price={price:.2f}")
+            return self._create_signal("long", price, indicators, strength, "RSI bullish + BB middle + EMA trend")
+
+        # Short signal: RSI < 50 (bearish momentum) + price near/below BB middle + EMA trend confirmation
+        rsi_bearish = indicators.rsi < (self.rsi_bearish_threshold - self.rsi_momentum_strength)
+        price_below_middle = bb_position <= (0.5 + self.bb_position_threshold)  # Within threshold of middle or below
+        ema_bearish = indicators.ema_fast < indicators.ema_slow
+        trend_confirmed = ema_trend_strength >= self.trend_confirmation_bps
+
+        if rsi_bearish and price_below_middle and ema_bearish and trend_confirmed:
+            strength = min(1.0, (self.rsi_bearish_threshold - indicators.rsi) / 50.0)  # Strength based on RSI below 50
+            LOG.info(f"[mean_reversion] SHORT signal (trend following): RSI={indicators.rsi:.1f} (need <{self.rsi_bearish_threshold - self.rsi_momentum_strength:.1f}), BB_pos={bb_position:.2f}, EMA_fast={indicators.ema_fast:.2f} < EMA_slow={indicators.ema_slow:.2f}, price={price:.2f}")
+            return self._create_signal("short", price, indicators, strength, "RSI bearish + BB middle + EMA trend")
 
         return None
 
@@ -590,11 +595,11 @@ class MeanReversionTrader:
         if time.time() - entry_time > max_hold_seconds:
             return "time_stop"
 
-        # Reversal signal (opposite of entry)
-        if side == "long" and indicators.rsi > self.rsi_overbought:
-            return "reversal"
-        if side == "short" and indicators.rsi < self.rsi_oversold:
-            return "reversal"
+        # Trend reversal signal (RSI crosses opposite direction)
+        if side == "long" and indicators.rsi < self.rsi_bearish_threshold:
+            return "trend_reversal"
+        if side == "short" and indicators.rsi > self.rsi_bullish_threshold:
+            return "trend_reversal"
 
         return None
 
