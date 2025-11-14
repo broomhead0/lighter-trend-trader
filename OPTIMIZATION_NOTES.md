@@ -14,7 +14,7 @@
 - **RSI thresholds**: 30/70 → **25/75** (more extreme readings)
   - Rationale: More extreme RSI = stronger mean reversion signal
   - Reduces false entries, improves win rate
-  
+
 - **BB touch threshold**: 0.95 → **0.98** (price must be closer to bands)
   - Rationale: Only trade the most extreme moves
   - Better entry quality = better win rate
@@ -23,7 +23,7 @@
 - **Stop loss**: 6 bps → **8 bps** (wider stops)
   - Rationale: 15s candles = more noise, need wider stops to avoid false breakouts
   - Reduces premature stop-outs
-  
+
 - **Take profit**: 3 bps → **4 bps** (let winners run)
   - Rationale: With wider stops, need higher TP to maintain good R/R
   - Still maintains 2:1 risk/reward (8 bps risk, 4 bps reward... wait, that's 1:2)

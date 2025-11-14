@@ -488,7 +488,7 @@ class MeanReversionTrader:
         """Check for entry signals."""
         # Volatility filter
         if indicators.volatility_bps < self.vol_min_bps or indicators.volatility_bps > self.vol_max_bps:
-            LOG.debug(f"[mean_reversion] volatility filter: {indicators.volatility_bps:.1f} bps (need {self.vol_min_bps}-{self.vol_max_bps})")
+            LOG.info(f"[mean_reversion] volatility filter: {indicators.volatility_bps:.1f} bps (need {self.vol_min_bps}-{self.vol_max_bps})")
             return None
 
         # Trend filter - avoid strong trends
@@ -504,15 +504,25 @@ class MeanReversionTrader:
 
         # Long signal: price near lower BB, RSI oversold
         bb_position_long = (price - indicators.bb_lower) / (indicators.bb_middle - indicators.bb_lower) if indicators.bb_middle > indicators.bb_lower else 1.0
-        if bb_position_long <= (1.0 - self.bb_touch_threshold) and indicators.rsi < self.rsi_oversold:
+        bb_touch_long = bb_position_long <= (1.0 - self.bb_touch_threshold)
+        rsi_oversold_check = indicators.rsi < self.rsi_oversold
+        if bb_touch_long and rsi_oversold_check:
             strength = (self.rsi_oversold - indicators.rsi) / self.rsi_oversold
+            LOG.info(f"[mean_reversion] LONG signal: RSI={indicators.rsi:.1f} (need <{self.rsi_oversold}), BB_pos={bb_position_long:.3f} (need <{1.0 - self.bb_touch_threshold:.3f}), price={price:.2f}, BB_lower={indicators.bb_lower:.2f}")
             return self._create_signal("long", price, indicators, strength, "BB lower + RSI oversold")
+        elif rsi_oversold_check and not bb_touch_long:
+            LOG.debug(f"[mean_reversion] RSI oversold but BB not touched: RSI={indicators.rsi:.1f}, BB_pos={bb_position_long:.3f}, price={price:.2f}, BB_lower={indicators.bb_lower:.2f}")
 
         # Short signal: price near upper BB, RSI overbought
         bb_position_short = (price - indicators.bb_middle) / (indicators.bb_upper - indicators.bb_middle) if indicators.bb_upper > indicators.bb_middle else 1.0
-        if bb_position_short >= self.bb_touch_threshold and indicators.rsi > self.rsi_overbought:
+        bb_touch_short = bb_position_short >= self.bb_touch_threshold
+        rsi_overbought_check = indicators.rsi > self.rsi_overbought
+        if bb_touch_short and rsi_overbought_check:
             strength = (indicators.rsi - self.rsi_overbought) / (100 - self.rsi_overbought)
+            LOG.info(f"[mean_reversion] SHORT signal: RSI={indicators.rsi:.1f} (need >{self.rsi_overbought}), BB_pos={bb_position_short:.3f} (need >={self.bb_touch_threshold:.3f}), price={price:.2f}, BB_upper={indicators.bb_upper:.2f}")
             return self._create_signal("short", price, indicators, strength, "BB upper + RSI overbought")
+        elif rsi_overbought_check and not bb_touch_short:
+            LOG.debug(f"[mean_reversion] RSI overbought but BB not touched: RSI={indicators.rsi:.1f}, BB_pos={bb_position_short:.3f}, price={price:.2f}, BB_upper={indicators.bb_upper:.2f}")
 
         return None
 
