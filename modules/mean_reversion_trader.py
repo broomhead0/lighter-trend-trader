@@ -288,6 +288,38 @@ class MeanReversionTrader:
             return self.state.get_mid(self.market)
         return None
 
+    async def _build_candles_from_price(self):
+        """Build 1-minute candles from WebSocket price updates."""
+        price = self._get_current_price()
+        if price is None:
+            return
+
+        now = time.time()
+        current_minute = int(now // 60) * 60  # Round to minute
+
+        # Get or create current candle
+        if not self._candles or self._candles[-1].open_time < current_minute:
+            # New minute - create new candle
+            new_candle = Candle(
+                open_time=current_minute,
+                open=price,
+                high=price,
+                low=price,
+                close=price,
+                volume=0.0,  # Volume not available from WS
+            )
+            self._candles.append(new_candle)
+            # Keep only last 100 candles
+            if len(self._candles) > 100:
+                self._candles = self._candles[-100:]
+            LOG.debug(f"[mean_reversion] created new candle at {current_minute}, price={price:.2f}")
+        else:
+            # Update current candle
+            current_candle = self._candles[-1]
+            current_candle.high = max(current_candle.high, price)
+            current_candle.low = min(current_candle.low, price)
+            current_candle.close = price
+
     # ------------------------- Indicator Computation -------------------------
 
     def _compute_indicators(self) -> Optional[Indicators]:
