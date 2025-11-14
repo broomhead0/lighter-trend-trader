@@ -33,26 +33,29 @@ def load_config() -> Dict[str, Any]:
 def setup_logging():
     """Setup logging configuration."""
     level = os.environ.get("LOG_LEVEL", "INFO").upper()
-
-    # Create logs directory
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
-
-    # Log file with timestamp
-    from datetime import datetime
-    log_file = log_dir / f"bot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-
-    # Setup logging to both file and console
+    
+    # Check if running in Railway (or other cloud) - log to stdout only
+    is_railway = os.environ.get("RAILWAY_ENVIRONMENT") is not None or os.environ.get("RAILWAY_PROJECT_ID") is not None
+    
+    handlers = [logging.StreamHandler(sys.stdout)]
+    
+    # Only log to file if running locally (not Railway)
+    if not is_railway:
+        log_dir = Path("logs")
+        log_dir.mkdir(exist_ok=True)
+        from datetime import datetime
+        log_file = log_dir / f"bot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        handlers.append(logging.FileHandler(log_file))
+        LOG.info(f"Logging to {log_file}")
+    else:
+        LOG.info("Logging to stdout (Railway/cloud environment)")
+    
+    # Setup logging
     logging.basicConfig(
         level=level,
         format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
-        handlers=[
-            logging.FileHandler(log_file),
-            logging.StreamHandler(sys.stdout),
-        ],
+        handlers=handlers,
     )
-
-    LOG.info(f"Logging to {log_file}")
 
 
 async def main():
@@ -68,7 +71,7 @@ async def main():
     # Initialize trading client if configured
     trading_client: Optional[TradingClient] = None
     api_cfg = cfg.get("api") or {}
-    
+
     # Safety check: Warn if using same account as market maker bot
     account_index = api_cfg.get("account_index")
     if account_index == 366110:  # Known market maker bot account
@@ -76,7 +79,7 @@ async def main():
             "⚠️  WARNING: Using same account_index (366110) as market maker bot! "
             "This will cause order conflicts. Use a different account or API key."
         )
-    
+
     if api_cfg.get("key") and account_index is not None:
         try:
             from decimal import Decimal

@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Logs (local only, Railway uses stdout)
+logs/
+*.log
+
+# Config (use environment variables in Railway)
+config.yaml
+.env
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/
+*.json
+*.csv
+
+# Documentation (not needed in container)
+*.md
+!README.md
+

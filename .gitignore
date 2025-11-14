@@ -13,9 +13,10 @@ env/
 config.yaml
 .env
 
-# Logs
+# Logs (local only - Railway uses stdout)
 logs/
 *.log
+!logs/.gitkeep
 
 # Data
 data/

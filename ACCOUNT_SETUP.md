@@ -54,7 +54,7 @@ Your market maker bot uses:
 ### Recommended Setup
 
 1. **For Testing:** Keep `dry_run: true` (no account needed)
-2. **For Live Trading:** 
+2. **For Live Trading:**
    - Create a new API key in Lighter.xyz dashboard
    - Use that API key's `api_key_index` and private key
    - Or use a completely different account
