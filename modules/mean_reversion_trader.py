@@ -175,7 +175,7 @@ class MeanReversionTrader:
                 # Update indicators
                 indicators = self._compute_indicators()
                 if indicators is not None:
-                    LOG.debug(f"[mean_reversion] indicators computed: RSI={indicators.rsi:.1f}, BB_lower={indicators.bb_lower:.2f}, BB_upper={indicators.bb_upper:.2f}")
+                    LOG.info(f"[mean_reversion] indicators computed: RSI={indicators.rsi:.1f}, BB_lower={indicators.bb_lower:.2f}, BB_upper={indicators.bb_upper:.2f}, price={current_price:.2f}, vol_bps={indicators.volatility_bps:.1f}")
                 if indicators is None:
                     needed = max(self.bb_period, self.rsi_period, self.atr_period, self.ema_slow_period)
                     if len(self._candles) < needed:
@@ -475,6 +475,7 @@ class MeanReversionTrader:
         """Check for entry signals."""
         # Volatility filter
         if indicators.volatility_bps < self.vol_min_bps or indicators.volatility_bps > self.vol_max_bps:
+            LOG.debug(f"[mean_reversion] volatility filter: {indicators.volatility_bps:.1f} bps (need {self.vol_min_bps}-{self.vol_max_bps})")
             return None
 
         # Trend filter - avoid strong trends
@@ -482,9 +483,10 @@ class MeanReversionTrader:
         if ema_diff_bps > self.trend_filter_bps:
             return None  # Strong trend, skip
 
-        # Volume filter
+        # Volume filter (skip if volume is 0 - we don't have volume from WS)
         latest_candle = self._candles[-1] if self._candles else None
-        if not latest_candle or latest_candle.volume < indicators.volume_ma * self.volume_multiplier:
+        if latest_candle and latest_candle.volume > 0 and latest_candle.volume < indicators.volume_ma * self.volume_multiplier:
+            LOG.debug(f"[mean_reversion] volume filter: {latest_candle.volume:.0f} < {indicators.volume_ma * self.volume_multiplier:.0f}")
             return None
 
         # Long signal: price near lower BB, RSI oversold
