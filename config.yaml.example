@@ -53,8 +53,9 @@ renko_ao:
   dry_run: true  # Set to false for live trading (start with true!)
   market: market:2  # SOL market
 
-  # Renko parameters
-  renko_tick_size: 0.01  # Brick size in price units (1 cent = ~3-tick for $140 SOL)
+  # Renko parameters (ATR-based)
+  renko_atr_period: 14  # ATR period for calculating brick size
+  renko_atr_multiplier: 1.0  # ATR multiplier (1.0 = brick size = ATR, 2.0 = 2x ATR, etc.)
   renko_lookback: 20  # Number of bricks to look back for divergence detection
 
   # Awesome Oscillator parameters

@@ -208,7 +208,7 @@ async def main():
 
     # Run traders and price feed in parallel
     tasks = [price_feed.run(), stop_event.wait()]
-    
+
     if rsi_bb_trader:
         tasks.append(rsi_bb_trader.run())
     if renko_ao_trader:

@@ -102,9 +102,11 @@ class RenkoAOTrader:
         self.market = str(trader_cfg.get("market", "market:2"))
         self.dry_run = bool(trader_cfg.get("dry_run", True))
 
-        # Renko parameters
-        self.renko_tick_size = float(trader_cfg.get("renko_tick_size", 0.01))  # 1 cent = 3-tick for ~$140 SOL
+        # Renko parameters (ATR-based)
+        self.renko_atr_period = int(trader_cfg.get("renko_atr_period", 14))  # ATR period for brick size
+        self.renko_atr_multiplier = float(trader_cfg.get("renko_atr_multiplier", 1.0))  # ATR multiplier for brick size
         self.renko_lookback = int(trader_cfg.get("renko_lookback", 20))  # Look back 20 bricks for divergence
+        self._current_renko_brick_size: Optional[float] = None  # Dynamic brick size based on ATR
 
         # Awesome Oscillator parameters
         self.ao_fast_period = int(trader_cfg.get("ao_fast_period", 5))
@@ -130,15 +132,18 @@ class RenkoAOTrader:
         self._renko_bricks: Deque[RenkoBrick] = deque(maxlen=200)
         self._current_brick: Optional[RenkoBrick] = None
         self._price_history: Deque[float] = deque(maxlen=1000)  # For AO calculation
+        self._price_highs: Deque[float] = deque(maxlen=1000)  # For ATR calculation
+        self._price_lows: Deque[float] = deque(maxlen=1000)  # For ATR calculation
         self._current_position: Optional[Dict[str, Any]] = None
         self._open_orders: Dict[int, PlacedOrder] = {}
         self._stop = asyncio.Event()
 
         LOG.info(
-            "[renko_ao] initialized: market=%s dry_run=%s renko_tick_size=%.4f",
+            "[renko_ao] initialized: market=%s dry_run=%s renko_atr_period=%d renko_atr_multiplier=%.2f",
             self.market,
             self.dry_run,
-            self.renko_tick_size,
+            self.renko_atr_period,
+            self.renko_atr_multiplier,
         )
 
     async def run(self):
@@ -151,8 +156,22 @@ class RenkoAOTrader:
                     await asyncio.sleep(1.0)
                     continue
 
+                # Update price history for ATR calculation
+                self._price_history.append(current_price)
+                self._price_highs.append(current_price)
+                self._price_lows.append(current_price)
+
+                # Calculate ATR and update Renko brick size
+                atr = self._calculate_atr()
+                if atr is not None:
+                    self._current_renko_brick_size = atr * self.renko_atr_multiplier
+                elif len(self._price_history) < self.renko_atr_period:
+                    # Not enough data yet, use a default small size
+                    self._current_renko_brick_size = current_price * 0.001  # 0.1% as fallback
+
                 # Update Renko bricks
-                self._update_renko(current_price)
+                if self._current_renko_brick_size:
+                    self._update_renko(current_price)
 
                 # Need enough bricks for indicators
                 if len(self._renko_bricks) < max(self.bb_period, self.ao_slow_period, self.renko_lookback):
@@ -191,8 +210,38 @@ class RenkoAOTrader:
 
     # ------------------------- Renko Brick Building -------------------------
 
+    def _calculate_atr(self) -> Optional[float]:
+        """Calculate Average True Range (ATR) for Renko brick sizing."""
+        if len(self._price_history) < self.renko_atr_period + 1:
+            return None
+
+        # Calculate True Range for each period
+        true_ranges = []
+        for i in range(len(self._price_history) - self.renko_atr_period, len(self._price_history)):
+            if i == 0:
+                continue
+            high = self._price_highs[i] if i < len(self._price_highs) else self._price_history[i]
+            low = self._price_lows[i] if i < len(self._price_lows) else self._price_history[i]
+            prev_close = self._price_history[i - 1]
+            
+            tr1 = high - low
+            tr2 = abs(high - prev_close)
+            tr3 = abs(low - prev_close)
+            true_range = max(tr1, tr2, tr3)
+            true_ranges.append(true_range)
+
+        if not true_ranges:
+            return None
+
+        # ATR is the average of True Ranges
+        atr = sum(true_ranges) / len(true_ranges)
+        return atr
+
     def _update_renko(self, price: float) -> None:
-        """Update Renko bricks based on price movement."""
+        """Update Renko bricks based on price movement (ATR-based brick size)."""
+        if self._current_renko_brick_size is None or self._current_renko_brick_size <= 0:
+            return
+
         if self._current_brick is None:
             # Initialize first brick
             self._current_brick = RenkoBrick(
@@ -205,18 +254,18 @@ class RenkoAOTrader:
             )
             return
 
-        # Check if price moved enough to form a new brick
+        # Check if price moved enough to form a new brick (using ATR-based size)
         price_change = abs(price - self._current_brick.close)
         
-        if price_change >= self.renko_tick_size:
+        if price_change >= self._current_renko_brick_size:
             # Close current brick and start new one
             if price > self._current_brick.close:
                 # Upward brick
-                new_close = self._current_brick.close + self.renko_tick_size
+                new_close = self._current_brick.close + self._current_renko_brick_size
                 direction = "up"
             else:
                 # Downward brick
-                new_close = self._current_brick.close - self.renko_tick_size
+                new_close = self._current_brick.close - self._current_renko_brick_size
                 direction = "down"
 
             # Finalize current brick
@@ -224,7 +273,7 @@ class RenkoAOTrader:
             self._current_brick.direction = direction
             self._current_brick.high = max(self._current_brick.high, price)
             self._current_brick.low = min(self._current_brick.low, price)
-            
+
             # Add to history
             self._renko_bricks.append(self._current_brick)
             self._price_history.append(new_close)
@@ -239,7 +288,7 @@ class RenkoAOTrader:
                 low=price,
             )
 
-            LOG.debug(f"[renko_ao] new brick: {direction} @ {new_close:.2f}, total bricks: {len(self._renko_bricks)}")
+            LOG.debug(f"[renko_ao] new brick: {direction} @ {new_close:.2f}, brick_size={self._current_renko_brick_size:.4f}, total bricks: {len(self._renko_bricks)}")
         else:
             # Update current brick high/low
             self._current_brick.high = max(self._current_brick.high, price)
@@ -320,7 +369,7 @@ class RenkoAOTrader:
     def _detect_divergence(self, prices: List[float], ao: float, ao_prev: float) -> Tuple[Optional[str], float]:
         """
         Detect divergence between price and AO.
-        
+
         Returns:
             (divergence_type, strength) where type is "bullish", "bearish", or None
         """
@@ -329,11 +378,11 @@ class RenkoAOTrader:
 
         # Get recent price extremes
         recent_prices = prices[-self.renko_lookback:]
-        
+
         # Find recent lows and highs
         recent_lows = []
         recent_highs = []
-        
+
         for i in range(1, len(recent_prices) - 1):
             if recent_prices[i] < recent_prices[i-1] and recent_prices[i] < recent_prices[i+1]:
                 recent_lows.append((i, recent_prices[i]))
