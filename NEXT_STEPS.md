@@ -12,7 +12,7 @@
 ### 1. **Data Collection (In Progress)**
 The bot needs **21+ candles** to compute indicators:
 - Bollinger Bands: 20 periods
-- RSI: 14 periods  
+- RSI: 14 periods
 - ATR: 14 periods
 - EMA Slow: 21 periods
 

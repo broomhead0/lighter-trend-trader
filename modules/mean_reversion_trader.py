@@ -174,10 +174,12 @@ class MeanReversionTrader:
 
                 # Update indicators
                 indicators = self._compute_indicators()
+                if indicators is not None:
+                    LOG.debug(f"[mean_reversion] indicators computed: RSI={indicators.rsi:.1f}, BB_lower={indicators.bb_lower:.2f}, BB_upper={indicators.bb_upper:.2f}")
                 if indicators is None:
                     needed = max(self.bb_period, self.rsi_period, self.atr_period, self.ema_slow_period)
                     if len(self._candles) < needed:
-                        LOG.debug(f"[mean_reversion] collecting candles: {len(self._candles)}/{needed}")
+                        LOG.info(f"[mean_reversion] collecting candles: {len(self._candles)}/{needed}")
                     await asyncio.sleep(5.0)
                     continue
 
@@ -318,7 +320,7 @@ class MeanReversionTrader:
             # Keep only last 100 candles
             if len(self._candles) > 100:
                 self._candles = self._candles[-100:]
-            LOG.debug(f"[mean_reversion] created new candle at {current_minute}, price={price:.2f}")
+            LOG.info(f"[mean_reversion] created new candle at {current_minute}, price={price:.2f}, total candles: {len(self._candles)}")
         else:
             # Update current candle
             current_candle = self._candles[-1]
