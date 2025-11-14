@@ -12,15 +12,15 @@ def analyze_logs(log_dir="logs"):
     if not log_dir.exists():
         print(f"Log directory {log_dir} not found")
         return
-    
+
     log_files = sorted(log_dir.glob("bot_*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
-    
+
     if not log_files:
         print("No log files found")
         return
-    
+
     print(f"Analyzing {len(log_files)} log file(s)...\n")
-    
+
     # Track metrics
     price_updates = []
     candle_fetches = []
@@ -28,7 +28,7 @@ def analyze_logs(log_dir="logs"):
     entries = []
     exits = []
     errors = []
-    
+
     for log_file in log_files:
         print(f"Reading {log_file.name}...")
         with open(log_file) as f:
@@ -38,13 +38,13 @@ def analyze_logs(log_dir="logs"):
                     match = re.search(r"price: ([\d.]+)", line)
                     if match:
                         price_updates.append(float(match.group(1)))
-                
+
                 # Candle fetches
                 if "fetched" in line and "candles" in line:
                     match = re.search(r"fetched (\d+) candles", line)
                     if match:
                         candle_fetches.append(int(match.group(1)))
-                
+
                 # Signals
                 if "entering" in line.lower() and "position" in line.lower():
                     signals_generated.append(line.strip())
@@ -57,7 +57,7 @@ def analyze_logs(log_dir="logs"):
                             "size": float(match.group(3)),
                             "line": line.strip(),
                         })
-                
+
                 # Exits
                 if "exiting position" in line.lower():
                     match = re.search(r"exiting position.*entry=([\d.]+).*reason=(\w+)", line)
@@ -67,16 +67,16 @@ def analyze_logs(log_dir="logs"):
                             "reason": match.group(2),
                             "line": line.strip(),
                         })
-                
+
                 # Errors
                 if "[ERROR]" in line or "Exception" in line or "Traceback" in line:
                     errors.append(line.strip())
-    
+
     # Print summary
     print("\n" + "="*60)
     print("BOT LOG ANALYSIS SUMMARY")
     print("="*60)
-    
+
     print(f"\n📊 Price Updates: {len(price_updates)}")
     if price_updates:
         print(f"   First: ${price_updates[0]:.2f}")
@@ -84,17 +84,17 @@ def analyze_logs(log_dir="logs"):
         if len(price_updates) > 1:
             price_change = ((price_updates[-1] - price_updates[0]) / price_updates[0]) * 100
             print(f"   Change: {price_change:+.2f}%")
-    
+
     print(f"\n📈 Candle Fetches: {len(candle_fetches)}")
     if candle_fetches:
         print(f"   Average candles per fetch: {sum(candle_fetches)/len(candle_fetches):.1f}")
-    
+
     print(f"\n🎯 Signals Generated: {len(signals_generated)}")
     if signals_generated:
         print("   Recent signals:")
         for sig in signals_generated[-5:]:
             print(f"   - {sig}")
-    
+
     print(f"\n📥 Entries: {len(entries)}")
     if entries:
         long_entries = [e for e in entries if e["side"] == "long"]
@@ -105,7 +105,7 @@ def analyze_logs(log_dir="logs"):
             print("   Recent entries:")
             for entry in entries[-3:]:
                 print(f"   - {entry['side'].upper()}: {entry['size']:.4f} @ ${entry['price']:.2f}")
-    
+
     print(f"\n📤 Exits: {len(exits)}")
     if exits:
         exit_reasons = defaultdict(int)
@@ -114,7 +114,7 @@ def analyze_logs(log_dir="logs"):
         print("   By reason:")
         for reason, count in exit_reasons.items():
             print(f"   - {reason}: {count}")
-    
+
     print(f"\n❌ Errors: {len(errors)}")
     if errors:
         print("   Recent errors:")
@@ -122,13 +122,13 @@ def analyze_logs(log_dir="logs"):
             print(f"   - {err[:100]}...")
     else:
         print("   ✅ No errors found!")
-    
+
     # Calculate PnL if we have entries and exits
     if entries and exits:
         print(f"\n💰 PnL Analysis:")
         # Simple PnL calculation (would need more data for accurate)
         print("   (PnL calculation requires more detailed position tracking)")
-    
+
     print("\n" + "="*60)
     print("Analysis complete!")
     print("="*60)

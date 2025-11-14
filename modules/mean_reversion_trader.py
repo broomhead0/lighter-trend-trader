@@ -215,18 +215,38 @@ class MeanReversionTrader:
                 LOG.warning("[mean_reversion] invalid market: %s", self.market)
                 return
 
-            url = f"{self.api_base_url.rstrip('/')}/public/markets/{market_id}/candles"
+            # Try different endpoint formats
+            urls_to_try = [
+                f"{self.api_base_url.rstrip('/')}/public/markets/{market_id}/candles",
+                f"{self.api_base_url.rstrip('/')}/markets/{market_id}/candles",
+            ]
+            
             params = {
                 "interval": "1m",
                 "limit": 100,  # Get last 100 candles
             }
+            
+            url = urls_to_try[0]  # Default to first
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=10) as resp:
-                    if resp.status != 200:
-                        LOG.warning("[mean_reversion] failed to fetch candles: %s", resp.status)
-                        return
-                    data = await resp.json()
+                # Try each URL until one works
+                for url in urls_to_try:
+                    try:
+                        async with session.get(url, params=params, timeout=10) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                break
+                            elif url == urls_to_try[-1]:
+                                # Last URL failed
+                                LOG.warning("[mean_reversion] failed to fetch candles: %s", resp.status)
+                                return
+                    except Exception as e:
+                        if url == urls_to_try[-1]:
+                            LOG.warning("[mean_reversion] error fetching candles: %s", e)
+                            return
+                        continue
+                else:
+                    return  # All URLs failed
                     candles_data = data.get("candles") if isinstance(data, dict) else data
 
                     if not isinstance(candles_data, list):

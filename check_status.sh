@@ -9,7 +9,7 @@ if pgrep -f "python main.py" > /dev/null; then
     echo "✅ Bot is RUNNING"
     PID=$(pgrep -f "python main.py" | head -1)
     echo "   PID: $PID"
-    
+
     # Check uptime
     if [ -n "$PID" ]; then
         UPTIME=$(ps -p $PID -o etime= | xargs)
@@ -30,12 +30,12 @@ if [ "$LOG_COUNT" -gt 0 ]; then
         echo "   Latest: $(basename $LATEST_LOG)"
         SIZE=$(du -h "$LATEST_LOG" | cut -f1)
         echo "   Size: $SIZE"
-        
+
         # Count key events
         PRICE_UPDATES=$(grep -c "price:" "$LATEST_LOG" 2>/dev/null || echo "0")
         SIGNALS=$(grep -c "entering.*position" "$LATEST_LOG" 2>/dev/null || echo "0")
         ERRORS=$(grep -c "ERROR\|Exception" "$LATEST_LOG" 2>/dev/null || echo "0")
-        
+
         echo "   Price updates: $PRICE_UPDATES"
         echo "   Signals: $SIGNALS"
         echo "   Errors: $ERRORS"
