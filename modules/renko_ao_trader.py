@@ -157,9 +157,19 @@ class RenkoAOTrader:
                     continue
 
                 # Update price history for ATR calculation
+                # Track price with timestamp for ATR
                 self._price_history.append(current_price)
-                self._price_highs.append(current_price)
-                self._price_lows.append(current_price)
+                # For ATR, we'll use price changes (since we only have mid prices)
+                # Track high/low as the price itself (will be updated if we get better data)
+                if len(self._price_highs) == 0 or current_price > self._price_highs[-1]:
+                    self._price_highs.append(current_price)
+                else:
+                    self._price_highs.append(self._price_highs[-1] if self._price_highs else current_price)
+                
+                if len(self._price_lows) == 0 or current_price < self._price_lows[-1]:
+                    self._price_lows.append(current_price)
+                else:
+                    self._price_lows.append(self._price_lows[-1] if self._price_lows else current_price)
 
                 # Calculate ATR and update Renko brick size
                 atr = self._calculate_atr()
@@ -216,20 +226,15 @@ class RenkoAOTrader:
             return None
 
         # Calculate True Range for each period
-        # Since we get mid prices, use price as both high and low (reasonable approximation)
+        # Since we get mid prices from WebSocket, use price changes as True Range approximation
         true_ranges = []
         for i in range(1, len(self._price_history)):
             if i >= len(self._price_history):
                 break
-            high = self._price_highs[i] if i < len(self._price_highs) else self._price_history[i]
-            low = self._price_lows[i] if i < len(self._price_lows) else self._price_history[i]
-            prev_close = self._price_history[i - 1]
-            
-            tr1 = high - low
-            tr2 = abs(high - prev_close)
-            tr3 = abs(low - prev_close)
-            true_range = max(tr1, tr2, tr3)
-            true_ranges.append(true_range)
+            # Use price change as True Range (since we only have mid prices)
+            # This is a reasonable approximation for ATR
+            price_change = abs(self._price_history[i] - self._price_history[i - 1])
+            true_ranges.append(price_change)
 
         if not true_ranges or len(true_ranges) < self.renko_atr_period:
             return None
