@@ -69,44 +69,44 @@ def _analyze_lines(lines, source_name="logs"):
     errors = []
     
     for line in lines:
-                # Price updates
-                if "[price_feed]" in line and "price:" in line:
-                    match = re.search(r"price: ([\d.]+)", line)
-                    if match:
-                        price_updates.append(float(match.group(1)))
-
-                # Candle fetches
-                if "fetched" in line and "candles" in line:
-                    match = re.search(r"fetched (\d+) candles", line)
-                    if match:
-                        candle_fetches.append(int(match.group(1)))
-
-                # Signals
-                if "entering" in line.lower() and "position" in line.lower():
-                    signals_generated.append(line.strip())
-                    # Extract signal details
-                    match = re.search(r"entering (\w+) position.*price=([\d.]+).*size=([\d.]+)", line)
-                    if match:
-                        entries.append({
-                            "side": match.group(1),
-                            "price": float(match.group(2)),
-                            "size": float(match.group(3)),
-                            "line": line.strip(),
-                        })
-
-                # Exits
-                if "exiting position" in line.lower():
-                    match = re.search(r"exiting position.*entry=([\d.]+).*reason=(\w+)", line)
-                    if match:
-                        exits.append({
-                            "entry_price": float(match.group(1)),
-                            "reason": match.group(2),
-                            "line": line.strip(),
-                        })
-
-                # Errors
-                if "[ERROR]" in line or "Exception" in line or "Traceback" in line:
-                    errors.append(line.strip())
+        # Price updates
+        if "[price_feed]" in line and "price:" in line:
+            match = re.search(r"price: ([\d.]+)", line)
+            if match:
+                price_updates.append(float(match.group(1)))
+        
+        # Candle fetches
+        if "fetched" in line and "candles" in line:
+            match = re.search(r"fetched (\d+) candles", line)
+            if match:
+                candle_fetches.append(int(match.group(1)))
+        
+        # Signals
+        if "entering" in line.lower() and "position" in line.lower():
+            signals_generated.append(line.strip())
+            # Extract signal details
+            match = re.search(r"entering (\w+) position.*price=([\d.]+).*size=([\d.]+)", line)
+            if match:
+                entries.append({
+                    "side": match.group(1),
+                    "price": float(match.group(2)),
+                    "size": float(match.group(3)),
+                    "line": line.strip(),
+                })
+        
+        # Exits
+        if "exiting position" in line.lower():
+            match = re.search(r"exiting position.*entry=([\d.]+).*reason=(\w+)", line)
+            if match:
+                exits.append({
+                    "entry_price": float(match.group(1)),
+                    "reason": match.group(2),
+                    "line": line.strip(),
+                })
+        
+        # Errors
+        if "[ERROR]" in line or "Exception" in line or "Traceback" in line:
+            errors.append(line.strip())
 
     # Print summary
     print("\n" + "="*60)
