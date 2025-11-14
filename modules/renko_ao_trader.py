@@ -170,7 +170,10 @@ class RenkoAOTrader:
                     self._update_renko(current_price)
 
                 # Need enough bricks for indicators
-                if len(self._renko_bricks) < max(self.bb_period, self.ao_slow_period, self.renko_lookback):
+                needed_bricks = max(self.bb_period, self.ao_slow_period, self.renko_lookback)
+                if len(self._renko_bricks) < needed_bricks:
+                    if len(self._renko_bricks) % 5 == 0 or len(self._renko_bricks) == 0:  # Log every 5 bricks or first brick
+                        LOG.info(f"[renko_ao] collecting bricks: {len(self._renko_bricks)}/{needed_bricks}, ATR={self._current_renko_brick_size:.4f if self._current_renko_brick_size else 0:.4f}, price_history={len(self._price_history)}")
                     await asyncio.sleep(1.0)
                     continue
 
@@ -249,7 +252,7 @@ class RenkoAOTrader:
 
         # Check if price moved enough to form a new brick (using ATR-based size)
         price_change = abs(price - self._current_brick.close)
-        
+
         if price_change >= self._current_renko_brick_size:
             # Close current brick and start new one
             if price > self._current_brick.close:
@@ -281,7 +284,7 @@ class RenkoAOTrader:
                 low=price,
             )
 
-            LOG.debug(f"[renko_ao] new brick: {direction} @ {new_close:.2f}, brick_size={self._current_renko_brick_size:.4f}, total bricks: {len(self._renko_bricks)}")
+            LOG.info(f"[renko_ao] new brick: {direction} @ {new_close:.2f}, brick_size={self._current_renko_brick_size:.4f}, total bricks: {len(self._renko_bricks)}")
         else:
             # Update current brick high/low
             self._current_brick.high = max(self._current_brick.high, price)
