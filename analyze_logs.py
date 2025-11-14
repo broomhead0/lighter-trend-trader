@@ -1,26 +1,65 @@
 #!/usr/bin/env python3
-"""Analyze bot logs to extract key metrics and events."""
+"""Analyze bot logs to extract key metrics and events.
+
+Works with:
+- Local log files (logs/bot_*.log)
+- Railway logs (if exported to file)
+- stdin (pipe logs directly)
+"""
 import re
+import sys
 from pathlib import Path
 from collections import defaultdict
 from datetime import datetime
 
 
-def analyze_logs(log_dir="logs"):
-    """Analyze bot logs and extract key information."""
-    log_dir = Path(log_dir)
-    if not log_dir.exists():
-        print(f"Log directory {log_dir} not found")
-        return
+def analyze_logs(log_dir="logs", log_file=None):
+    """Analyze bot logs and extract key information.
+    
+    Args:
+        log_dir: Directory containing log files (for local logs)
+        log_file: Specific log file to analyze (optional)
+    """
+    # If log_file is provided, analyze that
+    if log_file:
+        log_files = [Path(log_file)]
+    # If stdin has data, use that
+    elif not sys.stdin.isatty():
+        # Read from stdin
+        lines = sys.stdin.readlines()
+        return _analyze_lines(lines, "stdin")
+    else:
+        # Look for local log files
+        log_dir = Path(log_dir)
+        if not log_dir.exists():
+            print(f"Log directory {log_dir} not found")
+            print("\n💡 Tip: For Railway logs, export them first:")
+            print("   railway logs > railway_logs.txt")
+            print("   python analyze_logs.py railway_logs.txt")
+            return
+        log_files = sorted(log_dir.glob("bot_*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
 
-    log_files = sorted(log_dir.glob("bot_*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
-
-    if not log_files:
-        print("No log files found")
-        return
-
+        if not log_files:
+            print("No log files found")
+            print("\n💡 Tip: For Railway logs, export them first:")
+            print("   railway logs > railway_logs.txt")
+            print("   python analyze_logs.py railway_logs.txt")
+            return
+    
     print(f"Analyzing {len(log_files)} log file(s)...\n")
+    
+    # Read all lines from all files
+    all_lines = []
+    for log_file in log_files:
+        print(f"Reading {log_file.name}...")
+        with open(log_file) as f:
+            all_lines.extend(f.readlines())
+    
+    return _analyze_lines(all_lines, "log files")
 
+
+def _analyze_lines(lines, source_name="logs"):
+    """Analyze log lines and extract metrics."""
     # Track metrics
     price_updates = []
     candle_fetches = []
@@ -28,11 +67,8 @@ def analyze_logs(log_dir="logs"):
     entries = []
     exits = []
     errors = []
-
-    for log_file in log_files:
-        print(f"Reading {log_file.name}...")
-        with open(log_file) as f:
-            for line in f:
+    
+    for line in lines:
                 # Price updates
                 if "[price_feed]" in line and "price:" in line:
                     match = re.search(r"price: ([\d.]+)", line)
@@ -130,10 +166,16 @@ def analyze_logs(log_dir="logs"):
         print("   (PnL calculation requires more detailed position tracking)")
 
     print("\n" + "="*60)
-    print("Analysis complete!")
+    print(f"Analysis complete! (Source: {source_name})")
     print("="*60)
 
 
 if __name__ == "__main__":
-    analyze_logs()
+    import sys
+    if len(sys.argv) > 1:
+        # Analyze specific file
+        analyze_logs(log_file=sys.argv[1])
+    else:
+        # Analyze local logs or stdin
+        analyze_logs()
 

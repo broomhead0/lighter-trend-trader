@@ -1,0 +1,33 @@
+RAILWAY DEPLOYMENT - COPY/PASTE STEPS
+=====================================
+
+STEP 1: Create Project
+-----------------------
+1. Go to: https://railway.app/new
+2. Click "Deploy from GitHub repo"
+3. Select: lighter-trend-trader
+4. Click "Deploy Now"
+
+STEP 2: Set Environment Variables
+----------------------------------
+In Railway dashboard → Variables tab, add these:
+
+MEAN_REVERSION_ENABLED=true
+MEAN_REVERSION_DRY_RUN=true
+MEAN_REVERSION_MARKET=market:2
+LOG_LEVEL=INFO
+
+STEP 3: Wait for Build
+----------------------
+- Railway will auto-detect Dockerfile
+- Build takes 2-3 minutes
+- Watch in "Deployments" tab
+
+STEP 4: View Logs
+-----------------
+- Go to "Logs" tab
+- You should see bot starting
+- Bot is now running!
+
+That's it! Bot is deployed and running.
+
