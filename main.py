@@ -33,10 +33,26 @@ def load_config() -> Dict[str, Any]:
 def setup_logging():
     """Setup logging configuration."""
     level = os.environ.get("LOG_LEVEL", "INFO").upper()
+    
+    # Create logs directory
+    log_dir = Path("logs")
+    log_dir.mkdir(exist_ok=True)
+    
+    # Log file with timestamp
+    from datetime import datetime
+    log_file = log_dir / f"bot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    
+    # Setup logging to both file and console
     logging.basicConfig(
         level=level,
         format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler(sys.stdout),
+        ],
     )
+    
+    LOG.info(f"Logging to {log_file}")
 
 
 async def main():

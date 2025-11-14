@@ -8,7 +8,7 @@ from pathlib import Path
 async def test_setup():
     """Test that all components can be imported and initialized."""
     print("Testing Lighter Trend Trader setup...\n")
-    
+
     # Test 1: Imports
     print("1. Testing imports...")
     try:
@@ -20,7 +20,7 @@ async def test_setup():
     except Exception as e:
         print(f"   ✗ Import failed: {e}\n")
         return False
-    
+
     # Test 2: Config loading
     print("2. Testing config loading...")
     try:
@@ -37,7 +37,7 @@ async def test_setup():
     except Exception as e:
         print(f"   ✗ Config load failed: {e}\n")
         return False
-    
+
     # Test 3: State store
     print("3. Testing state store...")
     try:
@@ -52,7 +52,7 @@ async def test_setup():
     except Exception as e:
         print(f"   ✗ State store failed: {e}\n")
         return False
-    
+
     # Test 4: Price feed initialization
     print("4. Testing price feed initialization...")
     try:
@@ -61,7 +61,7 @@ async def test_setup():
     except Exception as e:
         print(f"   ✗ Price feed init failed: {e}\n")
         return False
-    
+
     # Test 5: Trader initialization
     print("5. Testing trader initialization...")
     try:
@@ -76,7 +76,7 @@ async def test_setup():
     except Exception as e:
         print(f"   ✗ Trader init failed: {e}\n")
         return False
-    
+
     # Test 6: API connectivity (optional)
     print("6. Testing API connectivity...")
     try:
@@ -95,7 +95,7 @@ async def test_setup():
                     print(f"   ⚠ API returned status {resp.status}\n")
     except Exception as e:
         print(f"   ⚠ API test failed (may be network issue): {e}\n")
-    
+
     print("✓ All basic tests passed! Bot is ready to run.")
     print("\nNext step: Run 'python main.py' to start the bot in dry-run mode.")
     return True

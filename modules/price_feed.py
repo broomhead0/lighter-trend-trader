@@ -77,7 +77,7 @@ class PriceFeed:
                 f"{self.api_base_url.rstrip('/')}/public/markets/{market_id}/candles",
                 f"{self.api_base_url.rstrip('/')}/markets/{market_id}/candles",
             ]
-            
+
             for url in urls_to_try:
                 params = {
                     "interval": "1m",
@@ -91,7 +91,7 @@ class PriceFeed:
                             if resp.status == 200:
                                 data = await resp.json()
                                 candles = data.get("candles") if isinstance(data, dict) else data
-                                
+
                                 if isinstance(candles, list) and len(candles) > 0:
                                     latest = candles[-1]
                                     close_price = latest.get("close")
@@ -99,7 +99,7 @@ class PriceFeed:
                                         return float(close_price)
                     except Exception:
                         continue
-                
+
                 # Fallback: try market stats endpoint if available
                 stats_urls = [
                     f"{self.api_base_url.rstrip('/')}/public/markets/{market_id}/stats",
