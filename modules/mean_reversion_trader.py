@@ -220,12 +220,12 @@ class MeanReversionTrader:
                 f"{self.api_base_url.rstrip('/')}/public/markets/{market_id}/candles",
                 f"{self.api_base_url.rstrip('/')}/markets/{market_id}/candles",
             ]
-            
+
             params = {
                 "interval": "1m",
                 "limit": 100,  # Get last 100 candles
             }
-            
+
             url = urls_to_try[0]  # Default to first
 
             async with aiohttp.ClientSession() as session:
@@ -246,10 +246,10 @@ class MeanReversionTrader:
                             LOG.warning("[mean_reversion] error fetching candles: %s", e)
                             return
                         continue
-                
+
                 if data is None:
                     return  # All URLs failed
-                
+
                 candles_data = data.get("candles") if isinstance(data, dict) else data
 
                 if not isinstance(candles_data, list):

@@ -2,9 +2,11 @@
 
 api:
   base_url: https://mainnet.zklighter.elliot.ai
-  key: ""  # Your API key private key (0x...)
-  account_index: 0  # Your account index
-  api_key_index: 0  # Your API key index
+  # ⚠️ IMPORTANT: Use a DIFFERENT account than your market making bot!
+  # See ACCOUNT_SETUP.md for details. For testing, keep dry_run: true (no account needed)
+  key: ""  # Your API key private key (0x...) - MUST be different from market maker bot
+  account_index: 0  # Your account index - MUST be different from market maker bot
+  api_key_index: 0  # Your API key index - Use a different API key than market maker
   max_api_key_index: null
   nonce_management: null  # OPTIMISTIC or CONSERVATIVE
 

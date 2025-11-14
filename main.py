@@ -68,7 +68,16 @@ async def main():
     # Initialize trading client if configured
     trading_client: Optional[TradingClient] = None
     api_cfg = cfg.get("api") or {}
-    if api_cfg.get("key") and api_cfg.get("account_index") is not None:
+    
+    # Safety check: Warn if using same account as market maker bot
+    account_index = api_cfg.get("account_index")
+    if account_index == 366110:  # Known market maker bot account
+        LOG.warning(
+            "⚠️  WARNING: Using same account_index (366110) as market maker bot! "
+            "This will cause order conflicts. Use a different account or API key."
+        )
+    
+    if api_cfg.get("key") and account_index is not None:
         try:
             from decimal import Decimal
             trading_cfg = TradingConfig(
