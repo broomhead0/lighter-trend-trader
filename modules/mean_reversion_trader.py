@@ -235,7 +235,7 @@ class MeanReversionTrader:
             interval_map = {
                 10: "10s",
                 15: "15s",
-                30: "30s", 
+                30: "30s",
                 60: "1m",
                 300: "5m",
             }
