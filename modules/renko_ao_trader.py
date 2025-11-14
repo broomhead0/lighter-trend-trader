@@ -183,6 +183,10 @@ class RenkoAOTrader:
                     await asyncio.sleep(1.0)
                     continue
 
+                # Log indicator values periodically
+                if int(time.time()) % 30 == 0:  # Every 30 seconds
+                    LOG.info(f"[renko_ao] indicators: AO={indicators.ao:.4f}, AO_trend={indicators.ao_trend}, divergence={indicators.divergence_type}, strength={indicators.divergence_strength:.2f}, BB_pos={indicators.price_position_bb:.2f}")
+
                 # Check for exit first
                 if self._current_position:
                     exit_reason = self._check_exit(current_price, indicators)
@@ -193,6 +197,9 @@ class RenkoAOTrader:
                     signal = self._check_entry(current_price, indicators)
                     if signal:
                         await self._enter_position(signal)
+                    elif indicators.divergence_type:
+                        # Log when divergence detected but signal not generated
+                        LOG.debug(f"[renko_ao] divergence detected ({indicators.divergence_type}) but no signal: strength={indicators.divergence_strength:.2f} < {self.min_divergence_strength:.2f}")
 
                 self._update_telemetry(indicators, current_price)
 
