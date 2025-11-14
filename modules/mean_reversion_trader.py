@@ -163,6 +163,9 @@ class MeanReversionTrader:
                     await self._fetch_candles()
                     self._last_candle_fetch = now
 
+                # Build candles from WebSocket price updates (fallback if REST API fails)
+                await self._build_candles_from_price()
+
                 # Get latest price
                 current_price = self._get_current_price()
                 if current_price is None:
@@ -172,6 +175,9 @@ class MeanReversionTrader:
                 # Update indicators
                 indicators = self._compute_indicators()
                 if indicators is None:
+                    needed = max(self.bb_period, self.rsi_period, self.atr_period, self.ema_slow_period)
+                    if len(self._candles) < needed:
+                        LOG.debug(f"[mean_reversion] collecting candles: {len(self._candles)}/{needed}")
                     await asyncio.sleep(5.0)
                     continue
 
