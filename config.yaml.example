@@ -34,7 +34,7 @@ mean_reversion:
   rsi_oversold: 25.0  # RSI threshold for long entries (more extreme = better entries)
   rsi_overbought: 75.0  # RSI threshold for short entries (more extreme = better entries)
   volume_multiplier: 1.2  # Volume must be 1.2x average
-  vol_min_bps: 4.0  # Minimum volatility to trade (avoid dead markets)
+  vol_min_bps: 2.0  # Minimum volatility to trade (lowered to allow trades in low vol periods)
   vol_max_bps: 25.0  # Maximum volatility to trade (avoid chaos)
   trend_filter_bps: 15.0  # Max EMA divergence (avoid strong trends)
 
