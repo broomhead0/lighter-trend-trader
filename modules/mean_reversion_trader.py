@@ -230,6 +230,7 @@ class MeanReversionTrader:
 
             async with aiohttp.ClientSession() as session:
                 # Try each URL until one works
+                data = None
                 for url in urls_to_try:
                     try:
                         async with session.get(url, params=params, timeout=10) as resp:
@@ -245,12 +246,14 @@ class MeanReversionTrader:
                             LOG.warning("[mean_reversion] error fetching candles: %s", e)
                             return
                         continue
-                else:
+                
+                if data is None:
                     return  # All URLs failed
-                    candles_data = data.get("candles") if isinstance(data, dict) else data
+                
+                candles_data = data.get("candles") if isinstance(data, dict) else data
 
-                    if not isinstance(candles_data, list):
-                        return
+                if not isinstance(candles_data, list):
+                    return
 
                     # Parse and update candles
                     new_candles = []
