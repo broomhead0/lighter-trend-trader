@@ -126,7 +126,7 @@ class MeanReversionTrader:
 
         # Risk management
         self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 4.5))  # Increased from 3.0 for better R:R
-        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 7.0))  # Widened from 6.0 to 7.0 to reduce premature stops (R:R = 0.64:1)
+        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 5.0))  # Widened from 4.0 (Railway) to 5.0 to reduce premature stops while maintaining R:R
         self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 8))  # Increased from 5 to reduce time stops
 
         # Adaptive parameters based on volatility
