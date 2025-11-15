@@ -121,9 +121,9 @@ class RenkoAOTrader:
         self.min_divergence_strength = float(trader_cfg.get("min_divergence_strength", 0.3))  # Minimum divergence strength
 
         # Risk management
-        self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 10.0))
-        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 5.0))
-        self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 5))
+        self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 12.0))  # Increased from 10.0 for better R:R
+        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 8.0))  # Widened from 5.0 to reduce premature stops
+        self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 8))  # Increased from 5 to reduce time stops
         self.risk_per_trade_pct = float(trader_cfg.get("risk_per_trade_pct", 1.0))
         # Position sizes - Lighter minimum is 0.001 SOL, but there may be a minimum notional requirement
         # At ~141 SOL price, 0.05 SOL = ~$7 notional (still rejected with code=21706)

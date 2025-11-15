@@ -117,7 +117,7 @@ class MeanReversionTrader:
         # Entry filters (trend following)
         self.rsi_bullish_threshold = float(trader_cfg.get("rsi_bullish_threshold", 50.0))  # RSI > 50 for longs
         self.rsi_bearish_threshold = float(trader_cfg.get("rsi_bearish_threshold", 50.0))  # RSI < 50 for shorts
-        self.rsi_momentum_strength = float(trader_cfg.get("rsi_momentum_strength", 10.0))  # RSI must be at least this far from 50
+        self.rsi_momentum_strength = float(trader_cfg.get("rsi_momentum_strength", 15.0))  # RSI must be at least this far from 50 (tightened from 10.0 for better win rate)
         self.bb_position_threshold = float(trader_cfg.get("bb_position_threshold", 0.3))  # Price within 30% of BB middle
         self.volume_multiplier = float(trader_cfg.get("volume_multiplier", 1.2))  # Volume must be 1.2x average
         self.vol_min_bps = float(trader_cfg.get("vol_min_bps", 2.0))  # Minimum volatility to trade
@@ -125,9 +125,9 @@ class MeanReversionTrader:
         self.trend_confirmation_bps = float(trader_cfg.get("trend_confirmation_bps", 2.0))  # Min EMA divergence for trend confirmation
 
         # Risk management
-        self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 3.0))
-        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 6.0))
-        self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 5))
+        self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 4.5))  # Increased from 3.0 for better R:R
+        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 9.0))  # Widened from 6.0 to reduce premature stops
+        self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 8))  # Increased from 5 to reduce time stops
         self.risk_per_trade_pct = float(trader_cfg.get("risk_per_trade_pct", 1.0))  # 1% of capital per trade
         # Position sizes - Lighter minimum is 0.001 SOL, but there may be a minimum notional requirement
         # At ~141 SOL price, 0.05 SOL = ~$7 notional (still rejected with code=21706)
