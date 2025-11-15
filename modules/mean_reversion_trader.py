@@ -204,7 +204,7 @@ class MeanReversionTrader:
 
                 # Cancel stale orders (orders that haven't filled after timeout)
                 await self._cancel_stale_orders()
-                
+
                 # Update indicators
                 indicators = self._compute_indicators()
                 if indicators is not None:
@@ -834,7 +834,7 @@ class MeanReversionTrader:
                             del self._open_orders[pos["order_index"]]
                         if pos["order_index"] in self._order_timestamps:
                             del self._order_timestamps[pos["order_index"]]
-                
+
                 # Cancel all other stale orders
                 await self._cancel_stale_orders()
 
@@ -901,17 +901,17 @@ class MeanReversionTrader:
         """Cancel orders that haven't filled after timeout."""
         if not self.trading_client or self.dry_run:
             return
-        
+
         current_time = time.time()
         stale_orders = []
-        
+
         for order_index, order in list(self._open_orders.items()):
             order_time = self._order_timestamps.get(order_index, current_time)
             age = current_time - order_time
-            
+
             if age > self._order_timeout_seconds:
                 stale_orders.append(order_index)
-        
+
         for order_index in stale_orders:
             try:
                 LOG.warning(f"[mean_reversion] cancelling stale order {order_index} (age: {current_time - self._order_timestamps.get(order_index, current_time):.1f}s > {self._order_timeout_seconds}s)")
