@@ -174,7 +174,7 @@ class RenkoAOTrader:
                 if len(self._renko_bricks) < needed_bricks:
                     if len(self._renko_bricks) % 5 == 0 or len(self._renko_bricks) == 0:  # Log every 5 bricks or first brick
                         atr_display = f"{self._current_renko_brick_size:.4f}" if self._current_renko_brick_size else "0.0000"
-                LOG.info(f"[renko_ao] collecting bricks: {len(self._renko_bricks)}/{needed_bricks}, ATR={atr_display}, price_history={len(self._price_history)}")
+                        LOG.info(f"[renko_ao] collecting bricks: {len(self._renko_bricks)}/{needed_bricks}, ATR={atr_display}, price_history={len(self._price_history)}")
                     await asyncio.sleep(1.0)
                     continue
 
