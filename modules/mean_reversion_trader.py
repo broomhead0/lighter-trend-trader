@@ -128,6 +128,12 @@ class MeanReversionTrader:
         self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 4.5))  # Increased from 3.0 for better R:R
         self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 9.0))  # Widened from 6.0 to reduce premature stops
         self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 8))  # Increased from 5 to reduce time stops
+        
+        # Adaptive parameters based on volatility
+        self.vol_low_threshold = float(trader_cfg.get("vol_low_threshold", 2.0))  # Below this = low vol, reduce size
+        self.vol_high_threshold = float(trader_cfg.get("vol_high_threshold", 8.0))  # Above this = high vol, widen stops
+        self.vol_optimal_min = float(trader_cfg.get("vol_optimal_min", 3.0))  # Optimal vol range
+        self.vol_optimal_max = float(trader_cfg.get("vol_optimal_max", 6.0))
         self.risk_per_trade_pct = float(trader_cfg.get("risk_per_trade_pct", 1.0))  # 1% of capital per trade
         # Position sizes - Lighter minimum is 0.001 SOL, but there may be a minimum notional requirement
         # At ~141 SOL price, 0.05 SOL = ~$7 notional (still rejected with code=21706)
@@ -141,6 +147,13 @@ class MeanReversionTrader:
         self._current_position: Optional[Dict[str, Any]] = None
         self._open_orders: Dict[int, PlacedOrder] = {}  # client_order_index -> order
         self._stop = asyncio.Event()
+        
+        # Adaptive trading: track recent performance
+        self._recent_pnl: Deque[float] = deque(maxlen=10)  # Track last 10 trades
+        self._losing_streak = 0
+        self._max_losing_streak_before_pause = 3  # Pause after 3 consecutive losses
+        self._pause_until = 0.0  # Timestamp to resume trading after pause
+        self._pause_duration_seconds = 300  # 5 minutes pause after losing streak
 
         # Candle fetching
         self._last_candle_fetch = 0.0
@@ -202,6 +215,13 @@ class MeanReversionTrader:
 
                 # Check for entry signals if no position
                 if not self._current_position:
+                    # Adaptive trading: check if we should pause after losing streak
+                    if time.time() < self._pause_until:
+                        if int(time.time()) % 30 == 0:  # Log every 30 seconds
+                            LOG.info(f"[mean_reversion] paused due to losing streak, resuming in {int(self._pause_until - time.time())}s")
+                        await asyncio.sleep(5.0)
+                        continue
+                    
                     signal = self._check_entry(current_price, indicators)
                     if signal:
                         await self._enter_position(signal)
@@ -495,9 +515,15 @@ class MeanReversionTrader:
 
     def _check_entry(self, price: float, indicators: Indicators) -> Optional[Signal]:
         """Check for entry signals (trend following)."""
-        # Volatility filter
-        if indicators.volatility_bps < self.vol_min_bps or indicators.volatility_bps > self.vol_max_bps:
-            LOG.debug(f"[mean_reversion] volatility filter: {indicators.volatility_bps:.1f} bps (need {self.vol_min_bps}-{self.vol_max_bps})")
+        # Volatility filter - be more selective in extreme conditions
+        vol = indicators.volatility_bps
+        if vol < self.vol_min_bps or vol > self.vol_max_bps:
+            LOG.debug(f"[mean_reversion] volatility filter: {vol:.1f} bps (need {self.vol_min_bps}-{self.vol_max_bps})")
+            return None
+        
+        # Additional filter: avoid trading in very choppy/low vol conditions after losses
+        if self._losing_streak >= 2 and vol < self.vol_optimal_min:
+            LOG.debug(f"[mean_reversion] skipping trade: losing streak + low volatility ({vol:.1f} bps)")
             return None
 
         # Volume filter (skip if volume is 0 - we don't have volume from WS)
@@ -538,31 +564,66 @@ class MeanReversionTrader:
         return None
 
     def _create_signal(self, side: str, price: float, indicators: Indicators, strength: float, reason: str) -> Signal:
-        """Create a trading signal with risk management."""
+        """Create a trading signal with risk management and adaptive parameters."""
+        # Adaptive stop loss and take profit based on volatility
+        vol = indicators.volatility_bps
+        stop_loss_bps = self.stop_loss_bps
+        take_profit_bps = self.take_profit_bps
+        
+        # Widen stops in high volatility, tighten in low volatility
+        if vol > self.vol_high_threshold:
+            stop_loss_bps = self.stop_loss_bps * 1.2  # 20% wider in high vol
+            take_profit_bps = self.take_profit_bps * 1.1  # 10% wider TP
+            LOG.debug(f"[mean_reversion] high volatility ({vol:.1f} bps), widening stops: SL={stop_loss_bps:.1f} TP={take_profit_bps:.1f}")
+        elif vol < self.vol_low_threshold:
+            stop_loss_bps = self.stop_loss_bps * 0.9  # 10% tighter in low vol
+            take_profit_bps = self.take_profit_bps * 0.9  # 10% tighter TP
+            LOG.debug(f"[mean_reversion] low volatility ({vol:.1f} bps), tightening stops: SL={stop_loss_bps:.1f} TP={take_profit_bps:.1f}")
+        
         # Calculate stop loss and take profit
         if side == "long":
-            stop_loss = price * (1 - self.stop_loss_bps / 10000)
-            take_profit = price * (1 + self.take_profit_bps / 10000)
+            stop_loss = price * (1 - stop_loss_bps / 10000)
+            take_profit = price * (1 + take_profit_bps / 10000)
         else:  # short
-            stop_loss = price * (1 + self.stop_loss_bps / 10000)
-            take_profit = price * (1 - self.take_profit_bps / 10000)
+            stop_loss = price * (1 + stop_loss_bps / 10000)
+            take_profit = price * (1 - take_profit_bps / 10000)
 
+        # Adaptive position sizing based on volatility and recent performance
+        vol = indicators.volatility_bps
+        size_multiplier = 1.0
+        
+        # Reduce size in low volatility (choppy markets)
+        if vol < self.vol_low_threshold:
+            size_multiplier = 0.7  # 30% smaller in low vol
+            LOG.debug(f"[mean_reversion] low volatility ({vol:.1f} bps), reducing size by 30%")
+        # Reduce size after losing streak
+        elif self._losing_streak >= 2:
+            size_multiplier = 0.8  # 20% smaller after 2+ losses
+            LOG.debug(f"[mean_reversion] losing streak ({self._losing_streak}), reducing size by 20%")
+        # Optimal volatility - use full size
+        elif self.vol_optimal_min <= vol <= self.vol_optimal_max:
+            size_multiplier = 1.0  # Full size in optimal vol
+        
         # Position sizing based on ATR and risk
         # Lighter minimum order size: 0.001 SOL (enforced)
         LIGHTER_MIN_ORDER_SIZE = 0.001
 
-        risk_amount = price * (self.stop_loss_bps / 10000)  # Risk per unit
+        risk_amount = price * (stop_loss_bps / 10000)  # Risk per unit
         if risk_amount > 0:
             # Size based on risk per trade percentage (would need capital tracking)
             # For now, use ATR-based sizing
             atr_based_size = indicators.atr * 0.5 / price
-            size = min(
+            base_size = min(
                 self.max_position_size,
                 max(self.min_position_size, atr_based_size)  # Rough sizing
             )
-            LOG.debug(f"[mean_reversion] position sizing: ATR={indicators.atr:.4f}, ATR-based={atr_based_size:.6f}, min={self.min_position_size:.6f}, max={self.max_position_size:.6f}, final={size:.6f}")
+            size = base_size * size_multiplier
+            # Ensure we don't go below minimum
+            size = max(self.min_position_size, size)
+            LOG.debug(f"[mean_reversion] position sizing: ATR={indicators.atr:.4f}, base={base_size:.6f}, multiplier={size_multiplier:.2f}, final={size:.6f}")
         else:
-            size = self.min_position_size
+            size = self.min_position_size * size_multiplier
+            size = max(self.min_position_size, size)
             LOG.debug(f"[mean_reversion] position sizing: using minimum={size:.6f}")
 
         # Ensure size doesn't exceed max
@@ -754,7 +815,18 @@ class MeanReversionTrader:
                 # Log live PnL
                 LOG.info("[mean_reversion] LIVE PnL: %.2f%% (entry=%.2f, exit=%.2f, size=%.4f)",
                          pnl_pct, pos["entry_price"], current_price, pos["size"])
-
+                
+                # Track recent performance for adaptive trading
+                self._recent_pnl.append(pnl_pct)
+                if pnl_pct < 0:
+                    self._losing_streak += 1
+                    # Pause trading after consecutive losses
+                    if self._losing_streak >= self._max_losing_streak_before_pause:
+                        self._pause_until = time.time() + self._pause_duration_seconds
+                        LOG.warning(f"[mean_reversion] ⚠️  Losing streak: {self._losing_streak} trades, pausing for {self._pause_duration_seconds}s")
+                else:
+                    self._losing_streak = 0  # Reset on win
+                
                 # Record in PnL tracker if available
                 if hasattr(self, "pnl_tracker") and self.pnl_tracker:
                     await self.pnl_tracker.record_trade(

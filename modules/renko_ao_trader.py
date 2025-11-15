@@ -139,6 +139,13 @@ class RenkoAOTrader:
         self._current_position: Optional[Dict[str, Any]] = None
         self._open_orders: Dict[int, PlacedOrder] = {}
         self._stop = asyncio.Event()
+        
+        # Adaptive trading: track recent performance
+        self._recent_pnl: Deque[float] = deque(maxlen=10)  # Track last 10 trades
+        self._losing_streak = 0
+        self._max_losing_streak_before_pause = 3  # Pause after 3 consecutive losses
+        self._pause_until = 0.0  # Timestamp to resume trading after pause
+        self._pause_duration_seconds = 300  # 5 minutes pause after losing streak
 
         LOG.info(
             "[renko_ao] initialized: market=%s dry_run=%s renko_atr_period=%d renko_atr_multiplier=%.2f min_size=%.6f max_size=%.6f",
@@ -200,6 +207,13 @@ class RenkoAOTrader:
                     if exit_reason:
                         await self._exit_position(exit_reason)
                 else:
+                    # Adaptive trading: check if we should pause after losing streak
+                    if time.time() < self._pause_until:
+                        if int(time.time()) % 30 == 0:  # Log every 30 seconds
+                            LOG.info(f"[renko_ao] paused due to losing streak, resuming in {int(self._pause_until - time.time())}s")
+                        await asyncio.sleep(1.0)
+                        continue
+                    
                     # Check for entry
                     signal = self._check_entry(current_price, indicators)
                     if signal:
@@ -659,6 +673,17 @@ class RenkoAOTrader:
                 # Log live PnL
                 LOG.info("[renko_ao] LIVE PnL: %.2f%% (entry=%.2f, exit=%.2f, size=%.4f)",
                          pnl_pct, pos["entry_price"], current_price, pos["size"])
+                
+                # Track recent performance for adaptive trading
+                self._recent_pnl.append(pnl_pct)
+                if pnl_pct < 0:
+                    self._losing_streak += 1
+                    # Pause trading after consecutive losses
+                    if self._losing_streak >= self._max_losing_streak_before_pause:
+                        self._pause_until = time.time() + self._pause_duration_seconds
+                        LOG.warning(f"[renko_ao] ⚠️  Losing streak: {self._losing_streak} trades, pausing for {self._pause_duration_seconds}s")
+                else:
+                    self._losing_streak = 0  # Reset on win
 
                 # Record in PnL tracker if available
                 if hasattr(self, "pnl_tracker") and self.pnl_tracker:
