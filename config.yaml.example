@@ -36,9 +36,9 @@ mean_reversion:
   rsi_momentum_strength: 10.0  # RSI must be at least this far from 50 (e.g., RSI > 60 for strong bullish)
   bb_position_threshold: 0.3  # Price must be within 30% of BB middle (not at extremes)
   volume_multiplier: 1.2  # Volume must be 1.2x average
-  vol_min_bps: 2.0  # Minimum volatility to trade                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
+  vol_min_bps: 2.0  # Minimum volatility to trade
 
-  
+
   vol_max_bps: 25.0  # Maximum volatility to trade (avoid chaos)
   trend_confirmation_bps: 2.0  # Min EMA divergence for trend confirmation (EMA fast > EMA slow)
 
@@ -70,8 +70,8 @@ renko_ao:
   bb_std: 2.0  # Standard deviation multiplier for BB
 
   # Entry filters
-  bb_enhancement_threshold: 0.2  # Within 20% of BB edge for enhanced signal
-  min_divergence_strength: 0.3  # Minimum divergence strength (0.0 to 1.0)
+  bb_enhancement_threshold: 0.3  # Within 30% of BB edge for enhanced signal (relaxed from 0.2)
+  min_divergence_strength: 0.05  # Minimum divergence strength (0.0 to 1.0) - lowered from 0.3 to allow more trades
 
   # Risk management
   take_profit_bps: 10.0  # Target profit in basis points
