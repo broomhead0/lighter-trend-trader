@@ -57,9 +57,22 @@ python scripts/create_lighter_account.py \
 
 **Note:** This may require the account to already exist or be created through the UI first.
 
-## Method 3: Same Account, Different API Key
+## Method 3: Same Account, Different API Key ⚠️ NOT RECOMMENDED
 
-If you can't create a new account, use the **same account** but a **different API key**:
+**Important:** Using the same account with different API keys does NOT prevent conflicts!
+
+### Why This Doesn't Work
+- Orders belong to the **account**, not the API key
+- Both bots will see the same inventory and positions
+- Both bots will see each other's orders
+- One bot may cancel the other's orders
+- Position tracking will conflict
+
+### When This Might Work
+Only if:
+- You're manually coordinating the bots
+- You're certain they won't interfere
+- You accept the risk of conflicts
 
 ### Step 1: Create New API Key
 1. Go to Lighter.xyz → API Settings
@@ -68,13 +81,13 @@ If you can't create a new account, use the **same account** but a **different AP
 
 ### Step 2: Update Config
 ```bash
-# Same account, different API key
+# Same account, different API key (NOT RECOMMENDED)
 ACCOUNT_INDEX=366110  # Same as market maker
 API_KEY_INDEX=1       # Different from market maker (which uses 0)
 API_KEY_PRIVATE_KEY=0x<new_api_key_private_key>
 ```
 
-**⚠️ Warning:** This is less ideal than separate accounts, but works if account creation isn't available.
+**⚠️ Strong Warning:** This is NOT recommended. Use a different account (Method 1) if at all possible.
 
 ## Verification
 

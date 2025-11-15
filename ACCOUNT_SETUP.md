@@ -27,11 +27,23 @@ api:
   key: "<DIFFERENT_API_KEY>"
 ```
 
-#### Option 2: Same Account, Different API Key
-If you must use the same account, use a different API key:
+#### Option 2: Same Account, Different API Key ⚠️ NOT RECOMMENDED
+**Warning:** This does NOT prevent conflicts! Orders belong to the account, not the API key.
+
+If you use the same account with different API keys:
+- ❌ Both bots will see the same inventory/positions
+- ❌ Both bots will see each other's orders
+- ❌ One bot may cancel the other's orders
+- ❌ Position tracking will conflict
+
+**Only use this if:**
+- You're absolutely certain the bots won't interfere
+- You're manually coordinating their behavior
+- You accept the risk of conflicts
+
 ```yaml
 api:
-  account_index: 366110  # Same account
+  account_index: 366110  # Same account (NOT RECOMMENDED)
   api_key_index: 1  # Different API key (market maker uses 0 or null)
   key: "<DIFFERENT_API_KEY_PRIVATE_KEY>"
 ```
