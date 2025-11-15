@@ -149,7 +149,8 @@ def main():
     
     if not trades:
         print("❌ No trades found in logs")
-        return
+        print("   Bot may have just deployed. Waiting for trades...")
+        return 1
     
     print(f"Found {sum(len(t) for t in trades.values())} total trades")
     print()
@@ -198,7 +199,12 @@ def main():
     print(f"Total Trades: {total_trades}")
     print(f"Total PnL: {total_pnl:+.4f}%")
     
-    if all_profitable and total_trades >= MIN_TRADES_PER_STRATEGY * 2:
+    if total_trades == 0:
+        print()
+        print("⏳ No trades yet. Bot may have just deployed.")
+        print("   Waiting for trades to accumulate...")
+        return 1
+    elif all_profitable and total_trades >= MIN_TRADES_PER_STRATEGY * 2:
         print()
         print("🎉 ALL STRATEGIES ARE PROFITABLE!")
         print("   Ready for production deployment.")
