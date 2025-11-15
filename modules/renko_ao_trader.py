@@ -868,13 +868,17 @@ class RenkoAOTrader:
             pos["size"] = total_size
             pos["initial_size"] = initial_size  # Store original size
 
-            # Adjust stop loss based on new average entry (wider stop to account for scaling)
-            # Use the worst entry price for stop loss calculation
-            worst_entry = min(entry_price, price) if side == "long" else max(entry_price, price)
+            # Adjust stop loss based on average entry with progressive widening
+            # Progressive widening: 2.0x for 1 scale, 2.5x for 2 scales, 3.0x for 3 scales
+            # This gives more room as position grows and accounts for larger position size
+            num_scales = len(self._scaled_entries) + 1  # +1 because we just added a scale
+            stop_multiplier = 1.0 + (num_scales * 0.5)  # 2.0x, 2.5x, 3.0x
+            
+            # Use average entry price (better reflects actual position cost basis)
             if side == "long":
-                pos["stop_loss"] = worst_entry * (1 - self.stop_loss_bps * 1.5 / 10000)  # 50% wider stop
+                pos["stop_loss"] = new_avg_entry * (1 - self.stop_loss_bps * stop_multiplier / 10000)
             else:
-                pos["stop_loss"] = worst_entry * (1 + self.stop_loss_bps * 1.5 / 10000)
+                pos["stop_loss"] = new_avg_entry * (1 + self.stop_loss_bps * stop_multiplier / 10000)
 
             LOG.info(
                 f"[renko_ao] position updated: avg_entry={new_avg_entry:.2f}, "
