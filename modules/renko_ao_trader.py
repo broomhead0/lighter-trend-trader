@@ -873,7 +873,7 @@ class RenkoAOTrader:
             # This gives more room as position grows and accounts for larger position size
             num_scales = len(self._scaled_entries) + 1  # +1 because we just added a scale
             stop_multiplier = 1.5 + (num_scales * 0.5)  # 2.0x for 1 scale, 2.5x for 2, 3.0x for 3
-            
+
             # Use average entry price (better reflects actual position cost basis)
             if side == "long":
                 pos["stop_loss"] = new_avg_entry * (1 - self.stop_loss_bps * stop_multiplier / 10000)

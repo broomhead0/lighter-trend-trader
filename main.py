@@ -46,7 +46,7 @@ def load_config() -> Dict[str, Any]:
 
 def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
     """Apply environment variable overrides to config."""
-    # API config
+    # API config (shared defaults)
     if os.environ.get("API_BASE_URL"):
         cfg.setdefault("api", {})["base_url"] = os.environ["API_BASE_URL"]
     if os.environ.get("API_KEY_PRIVATE_KEY"):
@@ -70,9 +70,13 @@ def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
     if os.environ.get("MEAN_REVERSION_CANDLE_INTERVAL_SECONDS"):
         cfg.setdefault("mean_reversion", {})["candle_interval_seconds"] = int(os.environ["MEAN_REVERSION_CANDLE_INTERVAL_SECONDS"])
 
-    # RSI + BB position size overrides (REMOVED - using code defaults as single source of truth)
-    # Position sizes are now defined in code with safe defaults (0.001-0.002 SOL)
-    # Can still override via config.yaml if needed, but env vars removed to avoid confusion
+    # RSI + BB per-strategy account config (optional, falls back to shared)
+    if os.environ.get("MEAN_REVERSION_ACCOUNT_INDEX"):
+        cfg.setdefault("mean_reversion", {}).setdefault("api", {})["account_index"] = int(os.environ["MEAN_REVERSION_ACCOUNT_INDEX"])
+    if os.environ.get("MEAN_REVERSION_API_KEY_INDEX"):
+        cfg.setdefault("mean_reversion", {}).setdefault("api", {})["api_key_index"] = int(os.environ["MEAN_REVERSION_API_KEY_INDEX"])
+    if os.environ.get("MEAN_REVERSION_API_KEY_PRIVATE_KEY"):
+        cfg.setdefault("mean_reversion", {}).setdefault("api", {})["key"] = os.environ["MEAN_REVERSION_API_KEY_PRIVATE_KEY"]
 
     # Renko + AO config
     if os.environ.get("RENKO_AO_ENABLED"):
@@ -82,9 +86,13 @@ def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
     if os.environ.get("RENKO_AO_MARKET"):
         cfg.setdefault("renko_ao", {})["market"] = os.environ["RENKO_AO_MARKET"]
 
-    # Renko + AO position size overrides (REMOVED - using code defaults as single source of truth)
-    # Position sizes are now defined in code with safe defaults (0.001-0.002 SOL)
-    # Can still override via config.yaml if needed, but env vars removed to avoid confusion
+    # Renko + AO per-strategy account config (optional, falls back to shared)
+    if os.environ.get("RENKO_AO_ACCOUNT_INDEX"):
+        cfg.setdefault("renko_ao", {}).setdefault("api", {})["account_index"] = int(os.environ["RENKO_AO_ACCOUNT_INDEX"])
+    if os.environ.get("RENKO_AO_API_KEY_INDEX"):
+        cfg.setdefault("renko_ao", {}).setdefault("api", {})["api_key_index"] = int(os.environ["RENKO_AO_API_KEY_INDEX"])
+    if os.environ.get("RENKO_AO_API_KEY_PRIVATE_KEY"):
+        cfg.setdefault("renko_ao", {}).setdefault("api", {})["key"] = os.environ["RENKO_AO_API_KEY_PRIVATE_KEY"]
 
 
 def setup_logging():
@@ -129,56 +137,77 @@ async def main():
     pnl_tracker = PnLTracker(db_path=os.environ.get("PNL_DB_PATH", "pnl_trades.db"))
     LOG.info("PnL tracker initialized (database-backed for high volume)")
 
-    # Initialize trading client if configured
-    trading_client: Optional[TradingClient] = None
-    api_cfg = cfg.get("api") or {}
+    # Helper function to create trading client from config
+    def create_trading_client(strategy_api_cfg: Optional[Dict[str, Any]] = None) -> Optional[TradingClient]:
+        """Create a TradingClient from config, with per-strategy overrides."""
+        # Use strategy-specific config if provided, otherwise fall back to shared config
+        api_cfg = strategy_api_cfg or cfg.get("api") or {}
 
-    # Safety check: Warn if using same account as market maker bot
-    account_index = api_cfg.get("account_index")
-    if account_index == 366110:  # Known market maker bot account
-        LOG.warning(
-            "⚠️  WARNING: Using same account_index (366110) as market maker bot! "
-            "This will cause order conflicts. Use a different account or API key."
-        )
+        # If strategy has its own api config, merge with shared defaults
+        if strategy_api_cfg:
+            shared_api_cfg = cfg.get("api") or {}
+            # Merge: strategy-specific overrides shared defaults
+            merged_cfg = {**shared_api_cfg, **strategy_api_cfg}
+            api_cfg = merged_cfg
 
-    if api_cfg.get("key") and account_index is not None:
-        try:
-            from decimal import Decimal
-            # Get scales from config or use defaults
-            # For SOL (market:2), base_scale should be 1000 (1 SOL = 1000 base units)
-            # If base_scale=1000000, then 0.0005 SOL becomes 500 base units, which the exchange interprets as 0.5 SOL
-            base_scale = Decimal(str(api_cfg.get("base_scale", "1000")))  # SOL uses 1000, not 1000000
-            price_scale = Decimal(str(api_cfg.get("price_scale", "1000")))
-
-            trading_cfg = TradingConfig(
-                base_url=str(api_cfg.get("base_url", "https://mainnet.zklighter.elliot.ai")),
-                api_key_private_key=str(api_cfg.get("key", "")),
-                account_index=int(api_cfg.get("account_index", 0)),
-                api_key_index=int(api_cfg.get("api_key_index", 0)),
-                base_scale=base_scale,
-                price_scale=price_scale,
-                nonce_management=api_cfg.get("nonce_management"),
-                max_api_key_index=api_cfg.get("max_api_key_index"),
+        # Safety check: Warn if using same account as market maker bot
+        account_index = api_cfg.get("account_index")
+        if account_index == 366110:  # Known market maker bot account
+            LOG.warning(
+                "⚠️  WARNING: Using same account_index (366110) as market maker bot! "
+                "This will cause order conflicts. Use a different account or API key."
             )
-            trading_client = TradingClient(trading_cfg)
-            LOG.info("Trading client initialized")
-        except Exception as exc:
-            LOG.warning(f"Failed to initialize trading client: {exc}")
+
+        if api_cfg.get("key") and account_index is not None:
+            try:
+                from decimal import Decimal
+                # Get scales from config or use defaults
+                # For SOL (market:2), base_scale should be 1000 (1 SOL = 1000 base units)
+                base_scale = Decimal(str(api_cfg.get("base_scale", "1000")))
+                price_scale = Decimal(str(api_cfg.get("price_scale", "1000")))
+
+                trading_cfg = TradingConfig(
+                    base_url=str(api_cfg.get("base_url", "https://mainnet.zklighter.elliot.ai")),
+                    api_key_private_key=str(api_cfg.get("key", "")),
+                    account_index=int(account_index),
+                    api_key_index=int(api_cfg.get("api_key_index", 0)),
+                    base_scale=base_scale,
+                    price_scale=price_scale,
+                    nonce_management=api_cfg.get("nonce_management"),
+                    max_api_key_index=api_cfg.get("max_api_key_index"),
+                )
+                client = TradingClient(trading_cfg)
+                LOG.info(f"Trading client initialized for account {account_index}, API key index {api_cfg.get('api_key_index', 0)}")
+                return client
+            except Exception as exc:
+                LOG.warning(f"Failed to initialize trading client: {exc}")
+                return None
+        return None
+
+    # Create shared trading client (for backward compatibility)
+    shared_trading_client = create_trading_client()
 
     # Initialize RSI + BB (mean reversion) trader
     rsi_bb_trader: Optional[MeanReversionTrader] = None
     rsi_bb_cfg = cfg.get("mean_reversion") or {}
     if rsi_bb_cfg.get("enabled", False):
         try:
+            # Use strategy-specific trading client if configured, otherwise use shared
+            rsi_bb_api_cfg = rsi_bb_cfg.get("api")
+            rsi_bb_trading_client = create_trading_client(rsi_bb_api_cfg) if rsi_bb_api_cfg else shared_trading_client
+
             rsi_bb_trader = MeanReversionTrader(
                 config=cfg,
                 state=state,
-                trading_client=trading_client,
+                trading_client=rsi_bb_trading_client,
                 alert_manager=None,
                 telemetry=None,
             )
             rsi_bb_trader.pnl_tracker = pnl_tracker  # Attach PnL tracker
-            LOG.info("RSI + BB trader initialized")
+            if rsi_bb_api_cfg:
+                LOG.info(f"RSI + BB trader initialized with dedicated account {rsi_bb_api_cfg.get('account_index')}")
+            else:
+                LOG.info("RSI + BB trader initialized (using shared account)")
         except Exception as exc:
             LOG.exception(f"Failed to initialize RSI + BB trader: {exc}")
     else:
@@ -189,15 +218,22 @@ async def main():
     renko_ao_cfg = cfg.get("renko_ao") or {}
     if renko_ao_cfg.get("enabled", False):
         try:
+            # Use strategy-specific trading client if configured, otherwise use shared
+            renko_ao_api_cfg = renko_ao_cfg.get("api")
+            renko_ao_trading_client = create_trading_client(renko_ao_api_cfg) if renko_ao_api_cfg else shared_trading_client
+
             renko_ao_trader = RenkoAOTrader(
                 config=cfg,
                 state=state,
-                trading_client=trading_client,
+                trading_client=renko_ao_trading_client,
                 alert_manager=None,
                 telemetry=None,
             )
             renko_ao_trader.pnl_tracker = pnl_tracker  # Attach PnL tracker
-            LOG.info("Renko + AO trader initialized")
+            if renko_ao_api_cfg:
+                LOG.info(f"Renko + AO trader initialized with dedicated account {renko_ao_api_cfg.get('account_index')}")
+            else:
+                LOG.info("Renko + AO trader initialized (using shared account)")
         except Exception as exc:
             LOG.exception(f"Failed to initialize Renko + AO trader: {exc}")
     else:
@@ -250,9 +286,18 @@ async def main():
             await rsi_bb_trader.stop()
         if renko_ao_trader:
             await renko_ao_trader.stop()
-        if trading_client:
+        # Close all trading clients
+        clients_to_close = []
+        if shared_trading_client:
+            clients_to_close.append(shared_trading_client)
+        if rsi_bb_trader and rsi_bb_trader.trading_client and rsi_bb_trader.trading_client != shared_trading_client:
+            clients_to_close.append(rsi_bb_trader.trading_client)
+        if renko_ao_trader and renko_ao_trader.trading_client and renko_ao_trader.trading_client != shared_trading_client:
+            clients_to_close.append(renko_ao_trader.trading_client)
+
+        for client in clients_to_close:
             try:
-                await trading_client.close()
+                await client.close()
             except Exception:
                 pass
         pnl_tracker.close()  # Close database connection
