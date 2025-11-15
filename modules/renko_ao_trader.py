@@ -705,6 +705,7 @@ class RenkoAOTrader:
                     post_only=False,
                 )
 
+                # Cancel entry order
                 if pos["order_index"] in self._open_orders:
                     try:
                         await self.trading_client.cancel_order(self.market, pos["order_index"])
@@ -716,6 +717,21 @@ class RenkoAOTrader:
                             del self._open_orders[pos["order_index"]]
                         if pos["order_index"] in self._order_timestamps:
                             del self._order_timestamps[pos["order_index"]]
+                
+                # Cancel all scaled entry orders
+                for scaled_entry in self._scaled_entries:
+                    scale_order_index = scaled_entry.get("order_index")
+                    if scale_order_index and scale_order_index in self._open_orders:
+                        try:
+                            await self.trading_client.cancel_order(self.market, scale_order_index)
+                            LOG.info(f"[renko_ao] cancelled scaled entry order {scale_order_index}")
+                        except Exception as e:
+                            LOG.warning(f"[renko_ao] failed to cancel scaled order {scale_order_index}: {e}")
+                        finally:
+                            if scale_order_index in self._open_orders:
+                                del self._open_orders[scale_order_index]
+                            if scale_order_index in self._order_timestamps:
+                                del self._order_timestamps[scale_order_index]
 
                 # Cancel all other stale orders
                 await self._cancel_stale_orders()
