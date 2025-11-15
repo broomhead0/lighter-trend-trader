@@ -100,6 +100,7 @@ This will stop all live trading instantly (bot will continue monitoring but won'
 
 - **Renko + AO:** Keep in dry-run until it starts generating signals
 - **RSI + BB:** Ready for live testing with tiny sizes
-- **Position Sizing:** Currently fixed at 0.01 SOL in code (needs update to respect config)
+- **Position Sizing:** Uses config values (0.001-0.005 SOL) - already implemented
 - **Risk Management:** Stop losses and take profits are working correctly
+- **Code:** Position sizing respects `min_position_size` and `max_position_size` from config
 
