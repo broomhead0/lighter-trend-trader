@@ -148,7 +148,7 @@ class RenkoAOTrader:
         self._max_losing_streak_before_pause = 5  # Increased from 3 to 5 for Renko (needs time to play out)
         self._pause_until = 0.0  # Timestamp to resume trading after pause
         self._pause_duration_seconds = 180  # Reduced from 300 to 180s (3 min) - shorter pause for Renko
-        
+
         # Position scaling/averaging in for divergence strategies
         self._enable_scaling = bool(trader_cfg.get("enable_scaling", True))  # Enable averaging in
         self._max_scales = int(trader_cfg.get("max_scales", 3))  # Max 3 additional entries (4 total)
@@ -685,7 +685,7 @@ class RenkoAOTrader:
                 pnl_pct = (current_price - avg_entry_price) / avg_entry_price * 100
             else:
                 pnl_pct = (avg_entry_price - current_price) / avg_entry_price * 100
-            
+
             # Log scaling info if we scaled
             if self._scaled_entries:
                 LOG.info(
@@ -717,7 +717,7 @@ class RenkoAOTrader:
                             del self._open_orders[pos["order_index"]]
                         if pos["order_index"] in self._order_timestamps:
                             del self._order_timestamps[pos["order_index"]]
-                
+
                 # Cancel all scaled entry orders
                 for scaled_entry in self._scaled_entries:
                     scale_order_index = scaled_entry.get("order_index")
@@ -784,26 +784,26 @@ class RenkoAOTrader:
         """Check if we should scale into an existing position (average in)."""
         if not self._current_position or not self._enable_scaling:
             return
-        
+
         pos = self._current_position
         side = pos["side"]
         entry_price = pos["entry_price"]
         entry_time = pos["entry_time"]
-        
+
         # Check if divergence still exists and is strengthening
         if indicators.divergence_type is None:
             return
-        
+
         # Check if we've hit max scales
         if len(self._scaled_entries) >= self._max_scales:
             return
-        
+
         # Check time since last scale (or entry)
         last_scale_time = self._scaled_entries[-1]["time"] if self._scaled_entries else entry_time
         time_since_last = time.time() - last_scale_time
         if time_since_last < self._scale_interval_seconds:
             return
-        
+
         # Check if price has moved against us enough to warrant scaling
         if side == "long":
             price_move_bps = (entry_price - price) / entry_price * 10000  # Price moved down
@@ -811,37 +811,39 @@ class RenkoAOTrader:
         else:  # short
             price_move_bps = (price - entry_price) / entry_price * 10000  # Price moved up
             should_scale = price_move_bps >= self._scale_price_threshold_bps and indicators.divergence_type == "bearish"
-        
+
         if not should_scale:
             return
-        
+
         # Calculate scale size
         initial_size = pos.get("initial_size", pos["size"])
         scale_size = initial_size * self._scale_size_multiplier
-        scale_size = max(self.min_position_size, min(scale_size, self.max_position_size))
-        
+        # For scaling, we allow sizes below min_position_size (but still enforce Lighter's absolute minimum of 0.001 SOL)
+        LIGHTER_MIN_ORDER_SIZE = 0.001  # Lighter's absolute minimum
+        scale_size = max(LIGHTER_MIN_ORDER_SIZE, min(scale_size, self.max_position_size))
+
         # Calculate new average entry price
         total_size = pos["size"] + scale_size
         if side == "long":
             new_avg_entry = (entry_price * pos["size"] + price * scale_size) / total_size
         else:
             new_avg_entry = (entry_price * pos["size"] + price * scale_size) / total_size
-        
+
         LOG.info(
             f"[renko_ao] scaling into {side} position: scale_size={scale_size:.4f}, "
             f"price={price:.2f} (moved {price_move_bps:.1f} bps), "
             f"avg_entry={new_avg_entry:.2f} (was {entry_price:.2f}), "
             f"total_size={total_size:.4f}, scales={len(self._scaled_entries)+1}/{self._max_scales}"
         )
-        
+
         # Place scale order
         try:
             if self.trading_client:
                 await self.trading_client.ensure_ready()
-            
+
             order_side = "bid" if side == "long" else "ask"
             order_price = price * 1.0001 if side == "long" else price * 0.9999
-            
+
             order = await self.trading_client.create_limit_order(
                 market=self.market,
                 side=order_side,
@@ -849,10 +851,10 @@ class RenkoAOTrader:
                 size=scale_size,
                 post_only=False,
             )
-            
+
             self._open_orders[order.client_order_index] = order
             self._order_timestamps[order.client_order_index] = time.time()
-            
+
             # Track scaled entry
             self._scaled_entries.append({
                 "price": price,
@@ -860,12 +862,12 @@ class RenkoAOTrader:
                 "time": time.time(),
                 "order_index": order.client_order_index
             })
-            
+
             # Update position with new average entry and total size
             pos["entry_price"] = new_avg_entry
             pos["size"] = total_size
             pos["initial_size"] = initial_size  # Store original size
-            
+
             # Adjust stop loss based on new average entry (wider stop to account for scaling)
             # Use the worst entry price for stop loss calculation
             worst_entry = min(entry_price, price) if side == "long" else max(entry_price, price)
@@ -873,12 +875,12 @@ class RenkoAOTrader:
                 pos["stop_loss"] = worst_entry * (1 - self.stop_loss_bps * 1.5 / 10000)  # 50% wider stop
             else:
                 pos["stop_loss"] = worst_entry * (1 + self.stop_loss_bps * 1.5 / 10000)
-            
+
             LOG.info(
                 f"[renko_ao] position updated: avg_entry={new_avg_entry:.2f}, "
                 f"total_size={total_size:.4f}, stop_loss={pos['stop_loss']:.2f}"
             )
-            
+
         except Exception as e:
             LOG.exception(f"[renko_ao] error scaling into position: {e}")
 
