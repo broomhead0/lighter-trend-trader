@@ -65,6 +65,12 @@ def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
     if os.environ.get("MEAN_REVERSION_CANDLE_INTERVAL_SECONDS"):
         cfg.setdefault("mean_reversion", {})["candle_interval_seconds"] = int(os.environ["MEAN_REVERSION_CANDLE_INTERVAL_SECONDS"])
 
+    # RSI + BB position size overrides
+    if os.environ.get("MEAN_REVERSION_MAX_POSITION_SIZE"):
+        cfg.setdefault("mean_reversion", {})["max_position_size"] = float(os.environ["MEAN_REVERSION_MAX_POSITION_SIZE"])
+    if os.environ.get("MEAN_REVERSION_MIN_POSITION_SIZE"):
+        cfg.setdefault("mean_reversion", {})["min_position_size"] = float(os.environ["MEAN_REVERSION_MIN_POSITION_SIZE"])
+
     # Renko + AO config
     if os.environ.get("RENKO_AO_ENABLED"):
         cfg.setdefault("renko_ao", {})["enabled"] = os.environ["RENKO_AO_ENABLED"].lower() == "true"
@@ -72,6 +78,12 @@ def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
         cfg.setdefault("renko_ao", {})["dry_run"] = os.environ["RENKO_AO_DRY_RUN"].lower() == "true"
     if os.environ.get("RENKO_AO_MARKET"):
         cfg.setdefault("renko_ao", {})["market"] = os.environ["RENKO_AO_MARKET"]
+    
+    # Renko + AO position size overrides
+    if os.environ.get("RENKO_AO_MAX_POSITION_SIZE"):
+        cfg.setdefault("renko_ao", {})["max_position_size"] = float(os.environ["RENKO_AO_MAX_POSITION_SIZE"])
+    if os.environ.get("RENKO_AO_MIN_POSITION_SIZE"):
+        cfg.setdefault("renko_ao", {})["min_position_size"] = float(os.environ["RENKO_AO_MIN_POSITION_SIZE"])
 
 
 def setup_logging():

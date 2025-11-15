@@ -17,7 +17,7 @@ ws:
 # RSI + BB Strategy (Trend Following)
 mean_reversion:
   enabled: true  # Set to true to enable RSI + BB strategy
-  dry_run: true  # Set to false for live trading (start with true!)
+  dry_run: false  # Set to false for live trading (TINY SIZE TESTING - 0.001-0.005 SOL)
   market: market:2  # SOL market
   candle_interval_seconds: 15  # Candle timeframe: 10s, 15s, 30s, 60s (smaller = faster iteration, more noise)
 
@@ -36,7 +36,9 @@ mean_reversion:
   rsi_momentum_strength: 10.0  # RSI must be at least this far from 50 (e.g., RSI > 60 for strong bullish)
   bb_position_threshold: 0.3  # Price must be within 30% of BB middle (not at extremes)
   volume_multiplier: 1.2  # Volume must be 1.2x average
-  vol_min_bps: 2.0  # Minimum volatility to trade
+  vol_min_bps: 2.0  # Minimum volatility to trade                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
+
+  
   vol_max_bps: 25.0  # Maximum volatility to trade (avoid chaos)
   trend_confirmation_bps: 2.0  # Min EMA divergence for trend confirmation (EMA fast > EMA slow)
 
@@ -45,8 +47,8 @@ mean_reversion:
   stop_loss_bps: 4.0  # Stop loss in basis points (tighter stops, but wider than before for 15s noise)
   max_hold_minutes: 3  # Maximum time to hold position (reduced for faster timeframe)
   risk_per_trade_pct: 1.0  # Risk 1% of capital per trade
-  max_position_size: 0.1  # Maximum SOL per trade
-  min_position_size: 0.01  # Minimum SOL per trade
+  max_position_size: 0.005  # Maximum SOL per trade (TINY for live testing)
+  min_position_size: 0.001  # Minimum SOL per trade (TINY for live testing)
 
 # Renko + AO Strategy (Divergence)
 renko_ao:
@@ -76,6 +78,6 @@ renko_ao:
   stop_loss_bps: 5.0  # Stop loss in basis points
   max_hold_minutes: 5  # Maximum time to hold position
   risk_per_trade_pct: 1.0  # Risk 1% of capital per trade
-  max_position_size: 0.1  # Maximum SOL per trade
-  min_position_size: 0.01  # Minimum SOL per trade
+  max_position_size: 0.005  # Maximum SOL per trade (TINY for live testing)
+  min_position_size: 0.001  # Minimum SOL per trade (TINY for live testing)
 

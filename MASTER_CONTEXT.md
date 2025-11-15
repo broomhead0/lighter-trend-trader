@@ -1,16 +1,16 @@
 # Master Context Document - Lighter Trend Trader
 
-**Last Updated:** 2025-11-14  
+**Last Updated:** 2025-11-14
 **Purpose:** This document contains all critical context needed to understand and work with this project when context is lost.
 
 ---
 
 ## Project Overview
 
-**Repository:** `lighter-trend-trader`  
-**Purpose:** Dual-strategy trading bot for SOL on Lighter.xyz exchange  
-**Deployment:** Railway (auto-deploys from GitHub)  
-**Language:** Python 3.11  
+**Repository:** `lighter-trend-trader`
+**Purpose:** Dual-strategy trading bot for SOL on Lighter.xyz exchange
+**Deployment:** Railway (auto-deploys from GitHub)
+**Language:** Python 3.11
 **Trading Mode:** Currently DRY RUN (simulation only)
 
 ### Key Infrastructure
@@ -24,8 +24,8 @@
 ## Two Trading Strategies
 
 ### 1. RSI + BB Strategy (Trend Following)
-**File:** `modules/mean_reversion_trader.py`  
-**Type:** Trend Following (trades WITH the trend)  
+**File:** `modules/mean_reversion_trader.py`
+**Type:** Trend Following (trades WITH the trend)
 **Status:** Active, trading
 
 **Entry Conditions:**
@@ -56,8 +56,8 @@
 ---
 
 ### 2. Renko + AO Strategy (Divergence/Mean Reversion)
-**File:** `modules/renko_ao_trader.py`  
-**Type:** Counter-Trend (trades AGAINST the trend on divergences)  
+**File:** `modules/renko_ao_trader.py`
+**Type:** Counter-Trend (trades AGAINST the trend on divergences)
 **Status:** Active, monitoring (no trades yet)
 
 **Entry Conditions:**
@@ -96,7 +96,7 @@
 
 ## Configuration System
 
-**Config File:** `config.yaml.example` (template)  
+**Config File:** `config.yaml.example` (template)
 **Environment Variables:** Railway uses env vars (see `railway.env.example`)
 
 ### Key Config Sections:
@@ -298,7 +298,7 @@ railway variables
 - **User Preference:** "Don't ask permission, just go for it" - user trusts decisions
 - **Testing:** Always start with `dry_run: true`
 - **Account Safety:** Always warn if using same account as market maker bot
-- **Strategy Philosophy:** 
+- **Strategy Philosophy:**
   - RSI + BB = Trend following (ride momentum)
   - Renko + AO = Counter-trend (fade divergences)
 
