@@ -154,6 +154,10 @@ class MeanReversionTrader:
         self._max_losing_streak_before_pause = 3  # Pause after 3 consecutive losses
         self._pause_until = 0.0  # Timestamp to resume trading after pause
         self._pause_duration_seconds = 300  # 5 minutes pause after losing streak
+        
+        # Position cooldown: prevent position accumulation
+        self._last_exit_time = 0.0  # Timestamp of last exit
+        self._exit_cooldown_seconds = 10.0  # Wait 10 seconds after exit before allowing new entry
 
         # Candle fetching
         self._last_candle_fetch = 0.0
@@ -221,7 +225,15 @@ class MeanReversionTrader:
                             LOG.info(f"[mean_reversion] paused due to losing streak, resuming in {int(self._pause_until - time.time())}s")
                         await asyncio.sleep(5.0)
                         continue
-
+                    
+                    # Position cooldown: prevent position accumulation
+                    time_since_exit = time.time() - self._last_exit_time
+                    if time_since_exit < self._exit_cooldown_seconds:
+                        if int(time.time()) % 10 == 0:  # Log every 10 seconds
+                            LOG.info(f"[mean_reversion] exit cooldown: waiting {self._exit_cooldown_seconds - time_since_exit:.1f}s before new entry (prevents position accumulation)")
+                        await asyncio.sleep(5.0)
+                        continue
+                    
                     signal = self._check_entry(current_price, indicators)
                     if signal:
                         await self._enter_position(signal)
@@ -843,6 +855,7 @@ class MeanReversionTrader:
                     )
 
             self._current_position = None
+            self._last_exit_time = time.time()  # Record exit time for cooldown
 
             if self.telemetry:
                 self.telemetry.set_gauge("mean_reversion_position_side", 0.0)

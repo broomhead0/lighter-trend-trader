@@ -146,6 +146,10 @@ class RenkoAOTrader:
         self._max_losing_streak_before_pause = 3  # Pause after 3 consecutive losses
         self._pause_until = 0.0  # Timestamp to resume trading after pause
         self._pause_duration_seconds = 300  # 5 minutes pause after losing streak
+        
+        # Position cooldown: prevent position accumulation
+        self._last_exit_time = 0.0  # Timestamp of last exit
+        self._exit_cooldown_seconds = 10.0  # Wait 10 seconds after exit before allowing new entry
 
         LOG.info(
             "[renko_ao] initialized: market=%s dry_run=%s renko_atr_period=%d renko_atr_multiplier=%.2f min_size=%.6f max_size=%.6f",
@@ -213,7 +217,15 @@ class RenkoAOTrader:
                             LOG.info(f"[renko_ao] paused due to losing streak, resuming in {int(self._pause_until - time.time())}s")
                         await asyncio.sleep(1.0)
                         continue
-
+                    
+                    # Position cooldown: prevent position accumulation
+                    time_since_exit = time.time() - self._last_exit_time
+                    if time_since_exit < self._exit_cooldown_seconds:
+                        if int(time.time()) % 10 == 0:  # Log every 10 seconds
+                            LOG.info(f"[renko_ao] exit cooldown: waiting {self._exit_cooldown_seconds - time_since_exit:.1f}s before new entry (prevents position accumulation)")
+                        await asyncio.sleep(1.0)
+                        continue
+                    
                     # Check for entry
                     signal = self._check_entry(current_price, indicators)
                     if signal:
@@ -701,6 +713,7 @@ class RenkoAOTrader:
                     )
 
             self._current_position = None
+            self._last_exit_time = time.time()  # Record exit time for cooldown
 
         except Exception as e:
             LOG.exception("[renko_ao] error exiting position: %s", e)
