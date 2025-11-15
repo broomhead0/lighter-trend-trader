@@ -173,6 +173,24 @@ class TradingClient:
 
         base_int = int(base_units)
         price_int = int(price_units)
+
+        # Debug: Log the scaling calculation (always log to catch issues)
+        expected_base_units = float(size) * float(self.cfg.base_scale)
+        LOG.info(
+            "[trading] size scaling: raw_size=%.6f SOL, base_scale=%s, base_units=%s, base_int=%d (expected: %.0f)",
+            size,
+            self.cfg.base_scale,
+            base_units,
+            base_int,
+            expected_base_units,
+        )
+        if abs(float(base_int) - expected_base_units) > 1:
+            LOG.warning(
+                "[trading] ⚠️  Size scaling mismatch! raw_size=%.6f should give base_int=%.0f but got %d",
+                size,
+                expected_base_units,
+                base_int,
+            )
         if base_int <= 0:
             raise ValueError(f"size scales to non-positive integer ({base_units})")
         if price_int <= 0:

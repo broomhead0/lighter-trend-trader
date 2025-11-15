@@ -47,8 +47,8 @@ mean_reversion:
   stop_loss_bps: 4.0  # Stop loss in basis points (tighter stops, but wider than before for 15s noise)
   max_hold_minutes: 3  # Maximum time to hold position (reduced for faster timeframe)
   risk_per_trade_pct: 1.0  # Risk 1% of capital per trade
-  max_position_size: 0.005  # Maximum SOL per trade (TINY for live testing)
-  min_position_size: 0.001  # Minimum SOL per trade (TINY for live testing)
+  max_position_size: 0.002  # Maximum SOL per trade (reduced for $100 account)
+  min_position_size: 0.001  # Minimum SOL per trade (Lighter's minimum is 0.001 SOL)
 
 # Renko + AO Strategy (Divergence)
 renko_ao:
@@ -78,6 +78,6 @@ renko_ao:
   stop_loss_bps: 5.0  # Stop loss in basis points
   max_hold_minutes: 5  # Maximum time to hold position
   risk_per_trade_pct: 1.0  # Risk 1% of capital per trade
-  max_position_size: 0.005  # Maximum SOL per trade (TINY for live testing)
-  min_position_size: 0.001  # Minimum SOL per trade (TINY for live testing)
+  max_position_size: 0.002  # Maximum SOL per trade (reduced for $100 account)
+  min_position_size: 0.001  # Minimum SOL per trade (Lighter's minimum is 0.001 SOL)
 

@@ -129,8 +129,10 @@ class MeanReversionTrader:
         self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 6.0))
         self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 5))
         self.risk_per_trade_pct = float(trader_cfg.get("risk_per_trade_pct", 1.0))  # 1% of capital per trade
-        self.max_position_size = float(trader_cfg.get("max_position_size", 0.1))  # Max SOL per trade
-        self.min_position_size = float(trader_cfg.get("min_position_size", 0.01))  # Min SOL per trade
+        # Position sizes - Lighter minimum is 0.001 SOL
+        # Defaults are set in code (single source of truth) but can be overridden by config/env
+        self.max_position_size = float(trader_cfg.get("max_position_size", 0.002))  # Max SOL per trade (default: 0.002 for $100 account)
+        self.min_position_size = float(trader_cfg.get("min_position_size", 0.001))  # Min SOL per trade (default: 0.001 = Lighter minimum)
 
         # Position tracking
         self._candles: Deque[Candle] = deque(maxlen=200)  # Keep last 200 candles (more for smaller timeframes)
@@ -147,10 +149,12 @@ class MeanReversionTrader:
         self.api_base_url = api_cfg.get("base_url", "https://mainnet.zklighter.elliot.ai")
 
         LOG.info(
-            "[mean_reversion] initialized: market=%s dry_run=%s candle_interval=%ds",
+            "[mean_reversion] initialized: market=%s dry_run=%s candle_interval=%ds min_size=%.6f max_size=%.6f",
             self.market,
             self.dry_run,
             self.candle_interval_seconds,
+            self.min_position_size,
+            self.max_position_size,
         )
 
     async def run(self):
@@ -542,16 +546,34 @@ class MeanReversionTrader:
             take_profit = price * (1 - self.take_profit_bps / 10000)
 
         # Position sizing based on ATR and risk
+        # Lighter minimum order size: 0.001 SOL (enforced)
+        LIGHTER_MIN_ORDER_SIZE = 0.001
+
         risk_amount = price * (self.stop_loss_bps / 10000)  # Risk per unit
         if risk_amount > 0:
             # Size based on risk per trade percentage (would need capital tracking)
             # For now, use ATR-based sizing
+            atr_based_size = indicators.atr * 0.5 / price
             size = min(
                 self.max_position_size,
-                max(self.min_position_size, indicators.atr * 0.5 / price)  # Rough sizing
+                max(self.min_position_size, atr_based_size)  # Rough sizing
             )
+            LOG.debug(f"[mean_reversion] position sizing: ATR={indicators.atr:.4f}, ATR-based={atr_based_size:.6f}, min={self.min_position_size:.6f}, max={self.max_position_size:.6f}, final={size:.6f}")
         else:
             size = self.min_position_size
+            LOG.debug(f"[mean_reversion] position sizing: using minimum={size:.6f}")
+
+        # Enforce Lighter's minimum order size
+        if size < LIGHTER_MIN_ORDER_SIZE:
+            LOG.warning(f"[mean_reversion] calculated size {size:.6f} below Lighter minimum {LIGHTER_MIN_ORDER_SIZE}, using minimum")
+            size = LIGHTER_MIN_ORDER_SIZE
+
+        # Ensure size doesn't exceed max
+        if size > self.max_position_size:
+            LOG.warning(f"[mean_reversion] calculated size {size:.6f} above maximum {self.max_position_size}, capping to max")
+            size = self.max_position_size
+
+        LOG.debug(f"[mean_reversion] final position size: {size:.6f} SOL (min={self.min_position_size:.6f}, max={self.max_position_size:.6f})")
 
         return Signal(
             side=side,
@@ -626,12 +648,20 @@ class MeanReversionTrader:
             else:
                 order_price = signal.entry_price * 0.9999  # Slightly below to get filled
 
+            # Final validation: ensure size meets Lighter's minimum
+            LIGHTER_MIN_ORDER_SIZE = 0.001
+            if signal.size < LIGHTER_MIN_ORDER_SIZE:
+                LOG.error(f"[mean_reversion] order size {signal.size:.4f} below Lighter minimum {LIGHTER_MIN_ORDER_SIZE}, skipping order")
+                return
+
             LOG.info(
-                "[mean_reversion] entering %s position: price=%.2f size=%.4f reason=%s",
+                "[mean_reversion] entering %s position: price=%.2f size=%.6f reason=%s (min=%.6f max=%.6f)",
                 signal.side,
                 order_price,
                 signal.size,
                 signal.reason,
+                self.min_position_size,
+                self.max_position_size,
             )
 
             if self.dry_run:
@@ -698,13 +728,14 @@ class MeanReversionTrader:
             exit_side = "ask" if pos["side"] == "long" else "bid"
             current_price = self._get_current_price() or pos["entry_price"]
 
+            # Calculate PnL (for both dry-run and live)
+            if pos["side"] == "long":
+                pnl_pct = (current_price - pos["entry_price"]) / pos["entry_price"] * 100
+            else:
+                pnl_pct = (pos["entry_price"] - current_price) / pos["entry_price"] * 100
+
             if self.dry_run:
                 LOG.info("[mean_reversion] DRY RUN: would exit %s position", exit_side)
-                # Calculate PnL
-                if pos["side"] == "long":
-                    pnl_pct = (current_price - pos["entry_price"]) / pos["entry_price"] * 100
-                else:
-                    pnl_pct = (pos["entry_price"] - current_price) / pos["entry_price"] * 100
                 LOG.info("[mean_reversion] simulated PnL: %.2f%%", pnl_pct)
             else:
                 # Place market order to exit
@@ -723,6 +754,25 @@ class MeanReversionTrader:
                     except Exception:
                         pass
                     del self._open_orders[pos["order_index"]]
+
+                # Log live PnL
+                LOG.info("[mean_reversion] LIVE PnL: %.2f%% (entry=%.2f, exit=%.2f, size=%.4f)",
+                         pnl_pct, pos["entry_price"], current_price, pos["size"])
+
+                # Record in PnL tracker if available
+                if hasattr(self, "pnl_tracker") and self.pnl_tracker:
+                    await self.pnl_tracker.record_trade(
+                        strategy="mean_reversion",
+                        side=pos["side"],
+                        entry_price=pos["entry_price"],
+                        exit_price=current_price,
+                        size=pos["size"],
+                        pnl_pct=pnl_pct,
+                        entry_time=pos["entry_time"],
+                        exit_time=time.time(),
+                        exit_reason=reason,
+                        market=self.market,
+                    )
 
             self._current_position = None
 

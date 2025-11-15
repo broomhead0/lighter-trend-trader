@@ -125,8 +125,10 @@ class RenkoAOTrader:
         self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 5.0))
         self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 5))
         self.risk_per_trade_pct = float(trader_cfg.get("risk_per_trade_pct", 1.0))
-        self.max_position_size = float(trader_cfg.get("max_position_size", 0.1))
-        self.min_position_size = float(trader_cfg.get("min_position_size", 0.01))
+        # Position sizes - Lighter minimum is 0.001 SOL
+        # Defaults are set in code (single source of truth) but can be overridden by config/env
+        self.max_position_size = float(trader_cfg.get("max_position_size", 0.002))  # Max SOL per trade (default: 0.002 for $100 account)
+        self.min_position_size = float(trader_cfg.get("min_position_size", 0.001))  # Min SOL per trade (default: 0.001 = Lighter minimum)
 
         # State
         self._renko_bricks: Deque[RenkoBrick] = deque(maxlen=200)
@@ -137,11 +139,13 @@ class RenkoAOTrader:
         self._stop = asyncio.Event()
 
         LOG.info(
-            "[renko_ao] initialized: market=%s dry_run=%s renko_atr_period=%d renko_atr_multiplier=%.2f",
+            "[renko_ao] initialized: market=%s dry_run=%s renko_atr_period=%d renko_atr_multiplier=%.2f min_size=%.6f max_size=%.6f",
             self.market,
             self.dry_run,
             self.renko_atr_period,
             self.renko_atr_multiplier,
+            self.min_position_size,
+            self.max_position_size,
         )
 
     async def run(self):
@@ -468,6 +472,9 @@ class RenkoAOTrader:
             take_profit = price * (1 - self.take_profit_bps / 10000)
 
         # Position sizing
+        # Lighter minimum order size: 0.001 SOL (enforced)
+        LIGHTER_MIN_ORDER_SIZE = 0.001
+
         risk_amount = price * (self.stop_loss_bps / 10000)
         if risk_amount > 0:
             size = min(
@@ -476,6 +483,14 @@ class RenkoAOTrader:
             )
         else:
             size = self.min_position_size
+
+        # Enforce Lighter's minimum order size
+        if size < LIGHTER_MIN_ORDER_SIZE:
+            LOG.warning(f"[renko_ao] calculated size {size:.4f} below Lighter minimum {LIGHTER_MIN_ORDER_SIZE}, using minimum")
+            size = LIGHTER_MIN_ORDER_SIZE
+
+        # Ensure size doesn't exceed max
+        size = min(size, self.max_position_size)
 
         return Signal(
             side=side,
@@ -543,6 +558,12 @@ class RenkoAOTrader:
             else:
                 order_price = signal.entry_price * 0.9999
 
+            # Final validation: ensure size meets Lighter's minimum
+            LIGHTER_MIN_ORDER_SIZE = 0.001
+            if signal.size < LIGHTER_MIN_ORDER_SIZE:
+                LOG.error(f"[renko_ao] order size {signal.size:.4f} below Lighter minimum {LIGHTER_MIN_ORDER_SIZE}, skipping order")
+                return
+
             LOG.info(
                 "[renko_ao] entering %s position: price=%.2f size=%.4f reason=%s",
                 signal.side,
@@ -609,12 +630,14 @@ class RenkoAOTrader:
             exit_side = "ask" if pos["side"] == "long" else "bid"
             current_price = self._get_current_price() or pos["entry_price"]
 
+            # Calculate PnL (for both dry-run and live)
+            if pos["side"] == "long":
+                pnl_pct = (current_price - pos["entry_price"]) / pos["entry_price"] * 100
+            else:
+                pnl_pct = (pos["entry_price"] - current_price) / pos["entry_price"] * 100
+
             if self.dry_run:
                 LOG.info("[renko_ao] DRY RUN: would exit %s position", exit_side)
-                if pos["side"] == "long":
-                    pnl_pct = (current_price - pos["entry_price"]) / pos["entry_price"] * 100
-                else:
-                    pnl_pct = (pos["entry_price"] - current_price) / pos["entry_price"] * 100
                 LOG.info("[renko_ao] simulated PnL: %.2f%%", pnl_pct)
             else:
                 order = await self.trading_client.create_limit_order(
@@ -631,6 +654,25 @@ class RenkoAOTrader:
                     except Exception:
                         pass
                     del self._open_orders[pos["order_index"]]
+
+                # Log live PnL
+                LOG.info("[renko_ao] LIVE PnL: %.2f%% (entry=%.2f, exit=%.2f, size=%.4f)",
+                         pnl_pct, pos["entry_price"], current_price, pos["size"])
+
+                # Record in PnL tracker if available
+                if hasattr(self, "pnl_tracker") and self.pnl_tracker:
+                    await self.pnl_tracker.record_trade(
+                        strategy="renko_ao",
+                        side=pos["side"],
+                        entry_price=pos["entry_price"],
+                        exit_price=current_price,
+                        size=pos["size"],
+                        pnl_pct=pnl_pct,
+                        entry_time=pos["entry_time"],
+                        exit_time=time.time(),
+                        exit_reason=reason,
+                        market=self.market,
+                    )
 
             self._current_position = None
 

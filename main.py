@@ -15,6 +15,7 @@ from core.trading_client import TradingClient, TradingConfig
 from modules.mean_reversion_trader import MeanReversionTrader
 from modules.renko_ao_trader import RenkoAOTrader
 from modules.ws_price_feed import WebSocketPriceFeed
+from modules.pnl_tracker import PnLTracker
 
 LOG = logging.getLogger("main")
 
@@ -54,6 +55,10 @@ def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
         cfg.setdefault("api", {})["account_index"] = int(os.environ["ACCOUNT_INDEX"])
     if os.environ.get("API_KEY_INDEX"):
         cfg.setdefault("api", {})["api_key_index"] = int(os.environ["API_KEY_INDEX"])
+    if os.environ.get("BASE_SCALE"):
+        cfg.setdefault("api", {})["base_scale"] = os.environ["BASE_SCALE"]
+    if os.environ.get("PRICE_SCALE"):
+        cfg.setdefault("api", {})["price_scale"] = os.environ["PRICE_SCALE"]
 
     # RSI + BB (mean reversion) config
     if os.environ.get("MEAN_REVERSION_ENABLED"):
@@ -65,11 +70,9 @@ def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
     if os.environ.get("MEAN_REVERSION_CANDLE_INTERVAL_SECONDS"):
         cfg.setdefault("mean_reversion", {})["candle_interval_seconds"] = int(os.environ["MEAN_REVERSION_CANDLE_INTERVAL_SECONDS"])
 
-    # RSI + BB position size overrides
-    if os.environ.get("MEAN_REVERSION_MAX_POSITION_SIZE"):
-        cfg.setdefault("mean_reversion", {})["max_position_size"] = float(os.environ["MEAN_REVERSION_MAX_POSITION_SIZE"])
-    if os.environ.get("MEAN_REVERSION_MIN_POSITION_SIZE"):
-        cfg.setdefault("mean_reversion", {})["min_position_size"] = float(os.environ["MEAN_REVERSION_MIN_POSITION_SIZE"])
+    # RSI + BB position size overrides (REMOVED - using code defaults as single source of truth)
+    # Position sizes are now defined in code with safe defaults (0.001-0.002 SOL)
+    # Can still override via config.yaml if needed, but env vars removed to avoid confusion
 
     # Renko + AO config
     if os.environ.get("RENKO_AO_ENABLED"):
@@ -78,12 +81,10 @@ def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
         cfg.setdefault("renko_ao", {})["dry_run"] = os.environ["RENKO_AO_DRY_RUN"].lower() == "true"
     if os.environ.get("RENKO_AO_MARKET"):
         cfg.setdefault("renko_ao", {})["market"] = os.environ["RENKO_AO_MARKET"]
-    
-    # Renko + AO position size overrides
-    if os.environ.get("RENKO_AO_MAX_POSITION_SIZE"):
-        cfg.setdefault("renko_ao", {})["max_position_size"] = float(os.environ["RENKO_AO_MAX_POSITION_SIZE"])
-    if os.environ.get("RENKO_AO_MIN_POSITION_SIZE"):
-        cfg.setdefault("renko_ao", {})["min_position_size"] = float(os.environ["RENKO_AO_MIN_POSITION_SIZE"])
+
+    # Renko + AO position size overrides (REMOVED - using code defaults as single source of truth)
+    # Position sizes are now defined in code with safe defaults (0.001-0.002 SOL)
+    # Can still override via config.yaml if needed, but env vars removed to avoid confusion
 
 
 def setup_logging():
@@ -124,6 +125,10 @@ async def main():
     # Initialize state store
     state = StateStore()
 
+    # Initialize PnL tracker (database-backed for high volume)
+    pnl_tracker = PnLTracker(db_path=os.environ.get("PNL_DB_PATH", "pnl_trades.db"))
+    LOG.info("PnL tracker initialized (database-backed for high volume)")
+
     # Initialize trading client if configured
     trading_client: Optional[TradingClient] = None
     api_cfg = cfg.get("api") or {}
@@ -139,13 +144,19 @@ async def main():
     if api_cfg.get("key") and account_index is not None:
         try:
             from decimal import Decimal
+            # Get scales from config or use defaults
+            # For SOL (market:2), base_scale should be 1000 (1 SOL = 1000 base units)
+            # If base_scale=1000000, then 0.0005 SOL becomes 500 base units, which the exchange interprets as 0.5 SOL
+            base_scale = Decimal(str(api_cfg.get("base_scale", "1000")))  # SOL uses 1000, not 1000000
+            price_scale = Decimal(str(api_cfg.get("price_scale", "1000")))
+
             trading_cfg = TradingConfig(
                 base_url=str(api_cfg.get("base_url", "https://mainnet.zklighter.elliot.ai")),
                 api_key_private_key=str(api_cfg.get("key", "")),
                 account_index=int(api_cfg.get("account_index", 0)),
                 api_key_index=int(api_cfg.get("api_key_index", 0)),
-                base_scale=Decimal("1000000"),  # Default scaling
-                price_scale=Decimal("1000"),  # Default scaling
+                base_scale=base_scale,
+                price_scale=price_scale,
                 nonce_management=api_cfg.get("nonce_management"),
                 max_api_key_index=api_cfg.get("max_api_key_index"),
             )
@@ -166,6 +177,7 @@ async def main():
                 alert_manager=None,
                 telemetry=None,
             )
+            rsi_bb_trader.pnl_tracker = pnl_tracker  # Attach PnL tracker
             LOG.info("RSI + BB trader initialized")
         except Exception as exc:
             LOG.exception(f"Failed to initialize RSI + BB trader: {exc}")
@@ -184,6 +196,7 @@ async def main():
                 alert_manager=None,
                 telemetry=None,
             )
+            renko_ao_trader.pnl_tracker = pnl_tracker  # Attach PnL tracker
             LOG.info("Renko + AO trader initialized")
         except Exception as exc:
             LOG.exception(f"Failed to initialize Renko + AO trader: {exc}")
@@ -242,6 +255,7 @@ async def main():
                 await trading_client.close()
             except Exception:
                 pass
+        pnl_tracker.close()  # Close database connection
         LOG.info("Shutdown complete")
 
 
