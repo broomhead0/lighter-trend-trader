@@ -11,18 +11,26 @@ To separate your trend trading strategies from your automated points bot, you ne
 - ✅ **Risk Isolation:** Problems in one bot don't affect the other
 - ✅ **Better Monitoring:** Track performance separately
 
-## Method 1: Through Lighter.xyz UI (Recommended)
+## Method 1: Create a Sub-Account (Recommended) ✅
+
+**Good News:** According to [Lighter.xyz documentation](https://docs.lighter.xyz/perpetual-futures/sub-accounts-and-api-keys), you can create **sub-accounts** tied to your existing Ethereum wallet. **You don't need a different wallet!**
+
+### What are Sub-Accounts?
+- Sub-accounts are separate accounts tied to the same Ethereum wallet
+- Each sub-account has its own `account_index` (different from main account)
+- Each sub-account can have up to 256 API keys
+- **Orders and positions are isolated** between sub-accounts
+- They share the same account tier and cross balance for fees
 
 ### Step 1: Access Lighter.xyz
 1. Go to **https://lighter.xyz** (or mainnet.zklighter.elliot.ai)
-2. Connect your wallet (same wallet as your main account is fine)
+2. Connect your wallet (same wallet as your main account)
 
-### Step 2: Create/Register New Account
-1. Navigate to **Account Settings** or **Profile**
-2. Look for **"Create New Account"** or **"Register Account"** option
-3. If using the same wallet, you may need to:
-   - Create a new account index
-   - Or use a different API key with a different `api_key_index`
+### Step 2: Create Sub-Account
+1. Navigate to **Account Settings** or **Sub-Accounts** section
+2. Look for **"Create Sub-Account"** or **"New Sub-Account"** option
+3. Create the sub-account (it will be tied to your existing wallet)
+4. Note the new `account_index` for the sub-account (different from 366110)
 
 ### Step 3: Get Account Index
 1. After creation, note your **account_index** (a number like `366110`)
@@ -43,7 +51,17 @@ API_KEY_PRIVATE_KEY=0x<new_api_key_private_key>
 API_KEY_INDEX=<api_key_index>
 ```
 
-## Method 2: Using Script (If Available)
+## Method 2: Different Wallet (Alternative)
+
+If you prefer complete separation (different wallet, different account tier, separate fees):
+1. Create a new Ethereum wallet
+2. Connect it to Lighter.xyz
+3. Register a new main account
+4. Use that account's `account_index`
+
+**Note:** Sub-accounts (Method 1) are usually sufficient and easier.
+
+## Method 3: Using Script (If Available)
 
 If account creation is supported via API:
 
@@ -57,7 +75,7 @@ python scripts/create_lighter_account.py \
 
 **Note:** This may require the account to already exist or be created through the UI first.
 
-## Method 3: Same Account, Different API Key ⚠️ NOT RECOMMENDED
+## Method 4: Same Account, Different API Key ⚠️ NOT RECOMMENDED
 
 **Important:** Using the same account with different API keys does NOT prevent conflicts!
 

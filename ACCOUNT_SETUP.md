@@ -19,15 +19,36 @@ If they share the same account:
 
 ### Solution Options
 
-#### Option 1: Different Account (Recommended)
-Use a completely different Lighter.xyz account:
+#### Option 1: Sub-Account (Recommended) ✅
+**Best Option:** Create a sub-account tied to your existing Ethereum wallet.
+
+According to [Lighter.xyz documentation](https://docs.lighter.xyz/perpetual-futures/sub-accounts-and-api-keys):
+- Sub-accounts are separate accounts with their own `account_index`
+- Orders and positions are isolated between sub-accounts
+- Each sub-account can have its own API keys
+- You don't need a different wallet!
+
+```yaml
+api:
+  account_index: <SUB_ACCOUNT_INDEX>  # Different from 366110
+  key: "<SUB_ACCOUNT_API_KEY>"
+```
+
+**How to create:**
+1. Go to Lighter.xyz → Account Settings → Sub-Accounts
+2. Create a new sub-account
+3. Generate API key for the sub-account
+4. Use the sub-account's `account_index` and API key
+
+#### Option 2: Different Main Account (Alternative)
+Use a completely different Lighter.xyz main account (requires different wallet):
 ```yaml
 api:
   account_index: <DIFFERENT_ACCOUNT_NUMBER>
   key: "<DIFFERENT_API_KEY>"
 ```
 
-#### Option 2: Same Account, Different API Key ⚠️ NOT RECOMMENDED
+#### Option 3: Same Account, Different API Key ⚠️ NOT RECOMMENDED
 **Warning:** This does NOT prevent conflicts! Orders belong to the account, not the API key.
 
 If you use the same account with different API keys:
@@ -48,7 +69,7 @@ api:
   key: "<DIFFERENT_API_KEY_PRIVATE_KEY>"
 ```
 
-#### Option 3: Dry-Run Only (Safest for Testing)
+#### Option 4: Dry-Run Only (Safest for Testing)
 Keep `dry_run: true` - no real orders, no conflicts:
 ```yaml
 mean_reversion:
