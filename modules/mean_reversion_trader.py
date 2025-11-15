@@ -126,7 +126,7 @@ class MeanReversionTrader:
 
         # Risk management
         self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 4.5))  # Increased from 3.0 for better R:R
-        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 6.0))  # Tightened from 9.0 to improve R:R (was widened too much)
+        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 7.0))  # Widened from 6.0 to 7.0 to reduce premature stops (R:R = 0.64:1)
         self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 8))  # Increased from 5 to reduce time stops
 
         # Adaptive parameters based on volatility
@@ -146,6 +146,8 @@ class MeanReversionTrader:
         self._candles: Deque[Candle] = deque(maxlen=200)  # Keep last 200 candles (more for smaller timeframes)
         self._current_position: Optional[Dict[str, Any]] = None
         self._open_orders: Dict[int, PlacedOrder] = {}  # client_order_index -> order
+        self._order_timestamps: Dict[int, float] = {}  # client_order_index -> creation timestamp
+        self._order_timeout_seconds = 30.0  # Cancel orders that haven't filled after 30 seconds
         self._stop = asyncio.Event()
 
         # Adaptive trading: track recent performance
@@ -154,7 +156,7 @@ class MeanReversionTrader:
         self._max_losing_streak_before_pause = 3  # Pause after 3 consecutive losses
         self._pause_until = 0.0  # Timestamp to resume trading after pause
         self._pause_duration_seconds = 300  # 5 minutes pause after losing streak
-        
+
         # Position cooldown: prevent position accumulation
         self._last_exit_time = 0.0  # Timestamp of last exit
         self._exit_cooldown_seconds = 10.0  # Wait 10 seconds after exit before allowing new entry
@@ -200,6 +202,9 @@ class MeanReversionTrader:
                     await asyncio.sleep(5.0)
                     continue
 
+                # Cancel stale orders (orders that haven't filled after timeout)
+                await self._cancel_stale_orders()
+                
                 # Update indicators
                 indicators = self._compute_indicators()
                 if indicators is not None:
@@ -225,7 +230,7 @@ class MeanReversionTrader:
                             LOG.info(f"[mean_reversion] paused due to losing streak, resuming in {int(self._pause_until - time.time())}s")
                         await asyncio.sleep(5.0)
                         continue
-                    
+
                     # Position cooldown: prevent position accumulation
                     time_since_exit = time.time() - self._last_exit_time
                     if time_since_exit < self._exit_cooldown_seconds:
@@ -233,7 +238,7 @@ class MeanReversionTrader:
                             LOG.info(f"[mean_reversion] exit cooldown: waiting {self._exit_cooldown_seconds - time_since_exit:.1f}s before new entry (prevents position accumulation)")
                         await asyncio.sleep(5.0)
                         continue
-                    
+
                     signal = self._check_entry(current_price, indicators)
                     if signal:
                         await self._enter_position(signal)
@@ -755,6 +760,7 @@ class MeanReversionTrader:
                 )
 
                 self._open_orders[order.client_order_index] = order
+                self._order_timestamps[order.client_order_index] = time.time()  # Track order creation time
                 self._current_position = {
                     "side": signal.side,
                     "entry_price": signal.entry_price,
@@ -820,9 +826,17 @@ class MeanReversionTrader:
                 if pos["order_index"] in self._open_orders:
                     try:
                         await self.trading_client.cancel_order(self.market, pos["order_index"])
-                    except Exception:
-                        pass
-                    del self._open_orders[pos["order_index"]]
+                        LOG.info(f"[mean_reversion] cancelled entry order {pos['order_index']}")
+                    except Exception as e:
+                        LOG.warning(f"[mean_reversion] failed to cancel order {pos['order_index']}: {e}")
+                    finally:
+                        if pos["order_index"] in self._open_orders:
+                            del self._open_orders[pos["order_index"]]
+                        if pos["order_index"] in self._order_timestamps:
+                            del self._order_timestamps[pos["order_index"]]
+                
+                # Cancel all other stale orders
+                await self._cancel_stale_orders()
 
                 # Log live PnL
                 LOG.info("[mean_reversion] LIVE PnL: %.2f%% (entry=%.2f, exit=%.2f, size=%.4f)",
@@ -882,6 +896,37 @@ class MeanReversionTrader:
                 self.telemetry.set_gauge("mean_reversion_bb_position", bb_position)
         except Exception:
             pass
+
+    async def _cancel_stale_orders(self) -> None:
+        """Cancel orders that haven't filled after timeout."""
+        if not self.trading_client or self.dry_run:
+            return
+        
+        current_time = time.time()
+        stale_orders = []
+        
+        for order_index, order in list(self._open_orders.items()):
+            order_time = self._order_timestamps.get(order_index, current_time)
+            age = current_time - order_time
+            
+            if age > self._order_timeout_seconds:
+                stale_orders.append(order_index)
+        
+        for order_index in stale_orders:
+            try:
+                LOG.warning(f"[mean_reversion] cancelling stale order {order_index} (age: {current_time - self._order_timestamps.get(order_index, current_time):.1f}s > {self._order_timeout_seconds}s)")
+                await self.trading_client.cancel_order(self.market, order_index)
+                if order_index in self._open_orders:
+                    del self._open_orders[order_index]
+                if order_index in self._order_timestamps:
+                    del self._order_timestamps[order_index]
+            except Exception as e:
+                LOG.warning(f"[mean_reversion] failed to cancel stale order {order_index}: {e}")
+                # Remove from tracking even if cancel failed (order might already be filled/cancelled)
+                if order_index in self._open_orders:
+                    del self._open_orders[order_index]
+                if order_index in self._order_timestamps:
+                    del self._order_timestamps[order_index]
 
     def _parse_market_id(self, market: str) -> Optional[int]:
         """Parse market identifier."""
