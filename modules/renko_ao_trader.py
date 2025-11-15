@@ -679,10 +679,19 @@ class RenkoAOTrader:
             current_price = self._get_current_price() or pos["entry_price"]
 
             # Calculate PnL (for both dry-run and live)
+            # Use average entry price if we scaled in
+            avg_entry_price = pos["entry_price"]  # This is already the average if we scaled
             if pos["side"] == "long":
-                pnl_pct = (current_price - pos["entry_price"]) / pos["entry_price"] * 100
+                pnl_pct = (current_price - avg_entry_price) / avg_entry_price * 100
             else:
-                pnl_pct = (pos["entry_price"] - current_price) / pos["entry_price"] * 100
+                pnl_pct = (avg_entry_price - current_price) / avg_entry_price * 100
+            
+            # Log scaling info if we scaled
+            if self._scaled_entries:
+                LOG.info(
+                    f"[renko_ao] exiting scaled position: {len(self._scaled_entries)} scales, "
+                    f"avg_entry={avg_entry_price:.2f}, total_size={pos['size']:.4f}"
+                )
 
             if self.dry_run:
                 LOG.info("[renko_ao] DRY RUN: would exit %s position", exit_side)
