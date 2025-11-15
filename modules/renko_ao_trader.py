@@ -118,11 +118,11 @@ class RenkoAOTrader:
 
         # Entry filters
         self.bb_enhancement_threshold = float(trader_cfg.get("bb_enhancement_threshold", 0.2))  # Within 20% of BB edge
-        self.min_divergence_strength = float(trader_cfg.get("min_divergence_strength", 0.03))  # Minimum divergence strength (lowered from 0.05 to capture more quality divergences)
+        self.min_divergence_strength = float(trader_cfg.get("min_divergence_strength", 0.05))  # Increased from 0.03 to be more selective (need 35.9% WR, currently 23.5%)
 
         # Risk management
         self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 12.0))  # Increased from 10.0 for better R:R
-        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 8.0))  # Widened from 7.0 to reduce premature stops (win rate was 23.8%)
+        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 7.0))  # Tightened from 8.0 to 7.0 to improve win rate (R:R already good at 1.79:1)
         self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 8))  # Increased from 5 to reduce time stops
         self.risk_per_trade_pct = float(trader_cfg.get("risk_per_trade_pct", 1.0))
         # Position sizes - Lighter minimum is 0.001 SOL, but there may be a minimum notional requirement

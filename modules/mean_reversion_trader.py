@@ -125,8 +125,8 @@ class MeanReversionTrader:
         self.trend_confirmation_bps = float(trader_cfg.get("trend_confirmation_bps", 2.0))  # Min EMA divergence for trend confirmation
 
         # Risk management
-        self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 4.5))  # Increased from 3.0 for better R:R
-        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 5.0))  # Widened from 4.0 (Railway) to 5.0 to reduce premature stops while maintaining R:R
+        self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 5.0))  # Increased from 4.5 to improve R:R (target 1.11:1)
+        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 4.5))  # Tightened from 5.0 to 4.5 to improve R:R while maintaining win rate
         self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 8))  # Increased from 5 to reduce time stops
 
         # Adaptive parameters based on volatility
