@@ -125,10 +125,12 @@ class RenkoAOTrader:
         self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 5.0))
         self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 5))
         self.risk_per_trade_pct = float(trader_cfg.get("risk_per_trade_pct", 1.0))
-        # Position sizes - Lighter minimum is 0.001 SOL
+        # Position sizes - Lighter minimum is 0.001 SOL, but there may be a minimum notional requirement
+        # At ~141 SOL price, 0.001 SOL = ~$0.14 notional, which may be too small
+        # Using 0.01 SOL (~$1.41 notional) to ensure we meet minimum quote amount requirements
         # Defaults are set in code (single source of truth) but can be overridden by config/env
-        self.max_position_size = float(trader_cfg.get("max_position_size", 0.002))  # Max SOL per trade (default: 0.002 for $100 account)
-        self.min_position_size = float(trader_cfg.get("min_position_size", 0.001))  # Min SOL per trade (default: 0.001 = Lighter minimum)
+        self.max_position_size = float(trader_cfg.get("max_position_size", 0.01))  # Max SOL per trade (default: 0.01 for $100 account)
+        self.min_position_size = float(trader_cfg.get("min_position_size", 0.01))  # Min SOL per trade (default: 0.01 to meet minimum notional)
 
         # State
         self._renko_bricks: Deque[RenkoBrick] = deque(maxlen=200)
@@ -558,10 +560,9 @@ class RenkoAOTrader:
             else:
                 order_price = signal.entry_price * 0.9999
 
-            # Final validation: ensure size meets Lighter's minimum
-            LIGHTER_MIN_ORDER_SIZE = 0.001
-            if signal.size < LIGHTER_MIN_ORDER_SIZE:
-                LOG.error(f"[renko_ao] order size {signal.size:.4f} below Lighter minimum {LIGHTER_MIN_ORDER_SIZE}, skipping order")
+            # Final validation: ensure size meets minimum
+            if signal.size < self.min_position_size:
+                LOG.error(f"[renko_ao] order size {signal.size:.4f} below minimum {self.min_position_size}, skipping order")
                 return
 
             LOG.info(
