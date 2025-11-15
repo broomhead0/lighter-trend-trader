@@ -166,9 +166,17 @@ async def main():
                 base_scale = Decimal(str(api_cfg.get("base_scale", "1000")))
                 price_scale = Decimal(str(api_cfg.get("price_scale", "1000")))
 
+                api_key = str(api_cfg.get("key", ""))
+                # Debug: Check key length (should be 66 chars: 0x + 64 hex)
+                key_len = len(api_key)
+                if key_len < 66:
+                    LOG.error(f"⚠️  API key for account {account_index} is too short: {key_len} chars (expected 66). Key starts with: {api_key[:20]}...")
+                    LOG.error(f"   This will cause 'invalid private key length' errors. Check Railway variables.")
+                    return None
+
                 trading_cfg = TradingConfig(
                     base_url=str(api_cfg.get("base_url", "https://mainnet.zklighter.elliot.ai")),
-                    api_key_private_key=str(api_cfg.get("key", "")),
+                    api_key_private_key=api_key,
                     account_index=int(account_index),
                     api_key_index=int(api_cfg.get("api_key_index", 0)),
                     base_scale=base_scale,

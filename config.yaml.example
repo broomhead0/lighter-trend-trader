@@ -20,7 +20,7 @@ mean_reversion:
   dry_run: false  # Set to false for live trading (TINY SIZE TESTING - 0.001-0.005 SOL)
   market: market:2  # SOL market
   candle_interval_seconds: 15  # Candle timeframe: 10s, 15s, 30s, 60s (smaller = faster iteration, more noise)
-  
+
   # Optional: Per-strategy account config (for account separation)
   # If not provided, falls back to shared api config above
   # api:
@@ -62,7 +62,7 @@ renko_ao:
   enabled: true  # Set to true to enable Renko + AO strategy
   dry_run: true  # Set to false for live trading (start with true!)
   market: market:2  # SOL market
-  
+
   # Optional: Per-strategy account config (for account separation)
   # If not provided, falls back to shared api config above
   # api:

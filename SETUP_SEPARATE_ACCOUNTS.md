@@ -67,12 +67,12 @@ python scripts/test_order.py \
 
 ## Benefits After Separation
 
-✅ **True Isolation**: Each strategy has its own account  
-✅ **No Position Conflicts**: Positions don't offset each other  
-✅ **Independent Tracking**: Each strategy sees real positions  
-✅ **Scaling Works**: Renko+AO can scale without affecting RSI+BB  
-✅ **Cleaner PnL**: Per-account, per-strategy tracking  
-✅ **Easier Debugging**: Can see actual positions per strategy  
+✅ **True Isolation**: Each strategy has its own account
+✅ **No Position Conflicts**: Positions don't offset each other
+✅ **Independent Tracking**: Each strategy sees real positions
+✅ **Scaling Works**: Renko+AO can scale without affecting RSI+BB
+✅ **Cleaner PnL**: Per-account, per-strategy tracking
+✅ **Easier Debugging**: Can see actual positions per strategy
 
 ## Troubleshooting
 
