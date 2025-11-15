@@ -1,6 +1,6 @@
 # Master Context Document - Lighter Trend Trader
 
-**Last Updated:** 2025-11-15
+**Last Updated:** 2025-11-15 (evening - adaptive trading features added)
 **Purpose:** This document contains all critical context needed to understand and work with this project when context is lost.
 
 ---
@@ -37,18 +37,32 @@
 - Volatility between 2-25 bps
 
 **Exit Conditions:**
-- Take profit: 8 bps
-- Stop loss: 4 bps
-- Time stop: 3 minutes max hold
+- Take profit: 4.5 bps (increased from 3.0 for better R:R)
+- Stop loss: 9.0 bps (widened from 6.0 to reduce premature stops)
+- Time stop: 8 minutes max hold (increased from 5 to reduce time stops)
 - Trend reversal: RSI crosses opposite direction (long exits if RSI < 50)
 
 **Key Parameters:**
-- `rsi_bullish_threshold: 50.0` (RSI > 50 + 10 = 60 for longs)
-- `rsi_bearish_threshold: 50.0` (RSI < 50 - 10 = 40 for shorts)
-- `rsi_momentum_strength: 10.0` (RSI must be 10 points from 50)
+- `rsi_bullish_threshold: 50.0` (RSI > 50 + 15 = 65 for longs)
+- `rsi_bearish_threshold: 50.0` (RSI < 50 - 15 = 35 for shorts)
+- `rsi_momentum_strength: 15.0` (RSI must be 15 points from 50 - increased from 10.0 for better win rate)
 - `bb_position_threshold: 0.3` (Price within 30% of BB middle)
 - `trend_confirmation_bps: 2.0` (Min EMA divergence for trend)
 - `candle_interval_seconds: 15` (15-second candles)
+
+**Adaptive Trading Features (NEW):**
+- **Volatility-Based Adjustments:**
+  - High volatility (>8 bps): Widen stops by 20%, widen TP by 10%
+  - Low volatility (<2 bps): Tighten stops by 10%, reduce position size by 30%
+  - Optimal volatility (3-6 bps): Full size and normal stops
+- **Losing Streak Protection:**
+  - Pause trading for 5 minutes after 3 consecutive losses
+  - Reduce position size by 20% after 2+ losses
+  - Skip trades in low volatility conditions during losing streaks
+- **Dynamic Position Sizing:**
+  - Low volatility: 30% size reduction
+  - After losing streak: 20% size reduction
+  - Optimal conditions: Full size
 
 **Performance Notes:**
 - Originally mean reversion (fading extremes) - struggled in trending markets
@@ -69,10 +83,15 @@
 - Enhanced signal if divergence occurs near Bollinger Bands (within 20% of edge)
 
 **Exit Conditions:**
-- Take profit: 10 bps
-- Stop loss: 5 bps
-- Time stop: 5 minutes max hold
+- Take profit: 12.0 bps (increased from 10.0 for better R:R)
+- Stop loss: 8.0 bps (widened from 5.0 to reduce premature stops)
+- Time stop: 8 minutes max hold (increased from 5 to reduce time stops)
 - AO reversal: Exit if AO trend reverses
+
+**Adaptive Trading Features (NEW):**
+- **Losing Streak Protection:**
+  - Pause trading for 5 minutes after 3 consecutive losses
+  - Reset losing streak counter on win
 
 **Key Parameters:**
 - `renko_atr_period: 14` (ATR period for brick sizing)
@@ -80,8 +99,8 @@
 - `renko_lookback: 20` (Bricks to look back for divergence)
 - `ao_fast_period: 5` (Fast SMA for AO)
 - `ao_slow_period: 34` (Slow SMA for AO)
-- `min_divergence_strength: 0.3` (Minimum divergence strength to trade)
-- `bb_enhancement_threshold: 0.2` (Within 20% of BB edge for enhancement)
+- `min_divergence_strength: 0.05` (Lowered from 0.3 to generate more signals)
+- `bb_enhancement_threshold: 0.3` (Relaxed from 0.2 to 0.3 for more signals)
 
 **Technical Details:**
 - **Renko Bricks:** ATR-based sizing (adapts to volatility)
@@ -321,19 +340,38 @@ lighter-trend-trader/
 ### RSI + BB Strategy
 - ✅ Active and trading
 - ✅ Trend following logic working
-- ⚠️ Recent performance: Mixed (some wins, some losses)
-- 📊 Recent trades: 5 trades, 1 win, 4 losses, -0.18% net
+- ✅ Adaptive trading features active (volatility-based adjustments, losing streak pauses)
+- 📊 Recent performance: 4 trades, 3W/1L, -0.01% net (75% win rate)
+- 📊 Average win: +0.0133%, Average loss: -0.0500%
 
 ### Renko + AO Strategy
 - ✅ Running and computing indicators
-- ✅ Bricks forming correctly (200+ collected)
-- ⚠️ No trades yet - divergences too weak (< 0.3 threshold)
-- 📊 Max divergence strength seen: 0.16 (needs 0.3)
+- ✅ Bricks forming correctly
+- ✅ Adaptive trading features active (losing streak pauses)
+- ✅ Trades being placed (threshold lowered to 0.05)
+- 📊 Recent performance: 2 trades, 2W/0L, +0.06% net (100% win rate)
+- 📊 Average win: +0.0300%
 
 ### Known Issues
 1. **REST API 404s:** Candle fetching often fails, but fallback (WebSocket) works
 2. **Volume Data:** Not available from WebSocket, volume filter skipped if volume = 0
-3. **Divergence Strength:** Renko strategy needs stronger divergences or lower threshold (lowered to 0.05)
+3. **Divergence Strength:** Renko strategy threshold lowered to 0.05 (was 0.3) - now generating trades
+
+### Recent Optimizations (2025-11-15)
+1. **Parameter Tweaks Based on PnL Analysis:**
+   - RSI momentum strength: 10.0 → 15.0 (tighter entries, better win rate)
+   - RSI+BB take profit: 3.0 → 4.5 bps (better R:R)
+   - RSI+BB stop loss: 6.0 → 9.0 bps (reduce premature stops)
+   - Renko+AO take profit: 10.0 → 12.0 bps (better R:R)
+   - Renko+AO stop loss: 5.0 → 8.0 bps (reduce premature stops)
+   - Max hold time: 5 → 8 minutes (both strategies, reduce time stops)
+
+2. **Adaptive Trading Features Added:**
+   - Volatility-based stop loss/take profit adjustments
+   - Volatility-based position sizing (reduce size in low vol)
+   - Losing streak detection and automatic pause (5 min after 3 losses)
+   - Dynamic position sizing based on market conditions
+   - Enhanced entry filters (skip low vol trades during losing streaks)
 
 ### API Key Status
 - ✅ API key generated and registered for account `281474976639501`
@@ -427,12 +465,37 @@ railway logs | grep "indicators computed\|indicators:"
 
 ---
 
+## Performance Metrics (Current)
+
+**Overall Performance (Last 6 Trades):**
+- Total Trades: 6
+- Win Rate: 83.3% (5W/1L)
+- Total PnL: +0.05%
+- Average PnL per Trade: +0.0083%
+- Risk/Reward Ratio: 0.40:1 (needs improvement - wins are small)
+
+**By Strategy:**
+- **RSI + BB:** 4 trades, 75% win rate, -0.01% net (small sample)
+- **Renko + AO:** 2 trades, 100% win rate, +0.06% net
+
+**By Exit Reason:**
+- Time stop: 3 trades, 100% win rate, +0.06% total
+- AO reversal: 1 trade, 100% win rate, +0.02%
+- Trend reversal: 1 trade, 100% win rate, +0.02%
+- Stop loss: 1 trade, 0% win rate, -0.05%
+
+**Key Observations:**
+- High win rate but small average wins (0.02% vs 0.05% average loss)
+- Risk/Reward ratio needs improvement (currently 0.40:1, target >1.0)
+- Time stops are working well (100% win rate)
+- Stop losses are the main source of losses
+
 ## Future Optimization Areas
 
-1. **Renko Divergence Threshold:** Consider lowering `min_divergence_strength` from 0.3 to 0.2
-2. **RSI + BB Parameters:** May need tuning based on market conditions
-3. **Risk Management:** Consider dynamic position sizing based on volatility
-4. **Exit Optimization:** Trailing stops or partial profit taking
+1. **Risk/Reward Improvement:** Consider wider take profits or tighter stop losses to improve R:R
+2. **Entry Quality:** Further tighten entry conditions to improve average win size
+3. **Exit Optimization:** Trailing stops or partial profit taking
+4. **Market Condition Detection:** Better detection of trending vs choppy markets
 
 ---
 
@@ -477,7 +540,8 @@ python scripts/test_order.py --account-index 281474976639501 --api-key-index 16 
 - **Trading Mode**: LIVE (tiny sizes: 0.001-0.002 SOL for $100 account)
 - **Lighter Minimum**: 0.001 SOL per order (enforced in code)
 - **Position Size Source**: Code defaults (single source of truth in `__init__` methods)
-  - Defaults: `min=0.001`, `max=0.002` (can override via config.yaml, env vars removed)
+  - Defaults: `min=0.1`, `max=0.1` SOL (meets Lighter minimum notional requirement ~$14)
+  - Adaptive sizing: Reduces by 30% in low vol, 20% after losing streak
 - **Base Scale**: 1000 (1 SOL = 1000 base units) - configured in code, can override via `BASE_SCALE` env var
 - **PnL Tracking**: Database-backed (`pnl_trades.db`) for high-volume scalability
 
