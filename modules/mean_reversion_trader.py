@@ -130,11 +130,11 @@ class MeanReversionTrader:
         self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 5))
         self.risk_per_trade_pct = float(trader_cfg.get("risk_per_trade_pct", 1.0))  # 1% of capital per trade
         # Position sizes - Lighter minimum is 0.001 SOL, but there may be a minimum notional requirement
-        # At ~141 SOL price, 0.01 SOL = ~$1.41 notional (still rejected with code=21706)
-        # Using 0.05 SOL (~$7 notional) to ensure we meet minimum quote amount requirements
+        # At ~141 SOL price, 0.05 SOL = ~$7 notional (still rejected with code=21706)
+        # Using 0.1 SOL (~$14 notional) to ensure we meet minimum quote amount requirements
         # Defaults are set in code (single source of truth) but can be overridden by config/env
-        self.max_position_size = float(trader_cfg.get("max_position_size", 0.05))  # Max SOL per trade (default: 0.05 for $100 account)
-        self.min_position_size = float(trader_cfg.get("min_position_size", 0.05))  # Min SOL per trade (default: 0.05 to meet minimum notional)
+        self.max_position_size = float(trader_cfg.get("max_position_size", 0.1))  # Max SOL per trade (default: 0.1 for $100 account)
+        self.min_position_size = float(trader_cfg.get("min_position_size", 0.1))  # Min SOL per trade (default: 0.1 to meet minimum notional)
 
         # Position tracking
         self._candles: Deque[Candle] = deque(maxlen=200)  # Keep last 200 candles (more for smaller timeframes)
