@@ -122,7 +122,7 @@ class RenkoAOTrader:
 
         # Risk management
         self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 12.0))  # Increased from 10.0 for better R:R
-        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 8.0))  # Widened from 5.0 to reduce premature stops
+        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 7.0))  # Tightened from 8.0 to improve R:R (target 1.71:1)
         self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 8))  # Increased from 5 to reduce time stops
         self.risk_per_trade_pct = float(trader_cfg.get("risk_per_trade_pct", 1.0))
         # Position sizes - Lighter minimum is 0.001 SOL, but there may be a minimum notional requirement
@@ -139,7 +139,7 @@ class RenkoAOTrader:
         self._current_position: Optional[Dict[str, Any]] = None
         self._open_orders: Dict[int, PlacedOrder] = {}
         self._stop = asyncio.Event()
-        
+
         # Adaptive trading: track recent performance
         self._recent_pnl: Deque[float] = deque(maxlen=10)  # Track last 10 trades
         self._losing_streak = 0
@@ -213,7 +213,7 @@ class RenkoAOTrader:
                             LOG.info(f"[renko_ao] paused due to losing streak, resuming in {int(self._pause_until - time.time())}s")
                         await asyncio.sleep(1.0)
                         continue
-                    
+
                     # Check for entry
                     signal = self._check_entry(current_price, indicators)
                     if signal:
@@ -673,7 +673,7 @@ class RenkoAOTrader:
                 # Log live PnL
                 LOG.info("[renko_ao] LIVE PnL: %.2f%% (entry=%.2f, exit=%.2f, size=%.4f)",
                          pnl_pct, pos["entry_price"], current_price, pos["size"])
-                
+
                 # Track recent performance for adaptive trading
                 self._recent_pnl.append(pnl_pct)
                 if pnl_pct < 0:
