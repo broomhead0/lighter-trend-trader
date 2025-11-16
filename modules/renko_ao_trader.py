@@ -157,9 +157,11 @@ class RenkoAOTrader:
         self._scale_size_multiplier = float(trader_cfg.get("scale_size_multiplier", 0.5))  # Each scale is 50% of initial size
         self._scaled_entries: List[Dict[str, Any]] = []  # Track scaled entries for average entry price
 
-        # Position cooldown: prevent position accumulation
+        # Position cooldown: prevent position accumulation (adaptive based on volatility/performance)
         self._last_exit_time = 0.0  # Timestamp of last exit
-        self._exit_cooldown_seconds = 10.0  # Wait 10 seconds after exit before allowing new entry
+        self._base_exit_cooldown_seconds = 10.0  # Base cooldown: 10 seconds
+        self._exit_cooldown_seconds = 10.0  # Current cooldown (adaptive)
+        self._recent_exit_reasons: Deque[str] = deque(maxlen=5)  # Track recent exit reasons
 
         LOG.info(
             "[renko_ao] initialized: market=%s dry_run=%s renko_atr_period=%d renko_atr_multiplier=%.2f min_size=%.6f max_size=%.6f",
@@ -234,11 +236,13 @@ class RenkoAOTrader:
                         await asyncio.sleep(1.0)
                         continue
 
-                    # Position cooldown: prevent position accumulation
+                    # Adaptive position cooldown: prevent position accumulation
+                    # Adjust cooldown based on volatility and recent performance
+                    self._update_adaptive_cooldown(indicators, current_price)
                     time_since_exit = time.time() - self._last_exit_time
                     if time_since_exit < self._exit_cooldown_seconds:
                         if int(time.time()) % 10 == 0:  # Log every 10 seconds
-                            LOG.info(f"[renko_ao] exit cooldown: waiting {self._exit_cooldown_seconds - time_since_exit:.1f}s before new entry (prevents position accumulation)")
+                            LOG.info(f"[renko_ao] exit cooldown: waiting {self._exit_cooldown_seconds - time_since_exit:.1f}s before new entry (adaptive, base={self._base_exit_cooldown_seconds:.1f}s)")
                         await asyncio.sleep(1.0)
                         continue
 
@@ -595,6 +599,10 @@ class RenkoAOTrader:
             if self.trading_client:
                 await self.trading_client.ensure_ready()
 
+            # Cancel any existing entry orders before placing new one (one at a time)
+            # This prevents multiple entry orders from accumulating
+            await self._cancel_stale_orders()
+
             order_side = "bid" if signal.side == "long" else "ask"
 
             if signal.side == "long":
@@ -739,6 +747,9 @@ class RenkoAOTrader:
                 # Log live PnL
                 LOG.info("[renko_ao] LIVE PnL: %.2f%% (entry=%.2f, exit=%.2f, size=%.4f)",
                          pnl_pct, pos["entry_price"], current_price, pos["size"])
+
+                # Track exit reason for adaptive cooldown
+                self._recent_exit_reasons.append(reason)
 
                 # Track recent performance for adaptive trading
                 self._recent_pnl.append(pnl_pct)
@@ -919,6 +930,44 @@ class RenkoAOTrader:
                 if order_index in self._order_timestamps:
                     del self._order_timestamps[order_index]
 
+    def _update_adaptive_cooldown(self, indicators: Optional[Indicators], price: Optional[float]) -> None:
+        """Update exit cooldown based on volatility and recent performance."""
+        if indicators is None or price is None:
+            self._exit_cooldown_seconds = self._base_exit_cooldown_seconds
+            return
+        
+        # Calculate volatility in bps from ATR
+        vol_bps = 0.0
+        if self._current_renko_brick_size and price > 0:
+            # ATR as percentage of price, converted to basis points
+            vol_bps = (self._current_renko_brick_size / price) * 10000
+        
+        # Start with base cooldown
+        cooldown = self._base_exit_cooldown_seconds
+        
+        # Increase cooldown in high volatility (choppy markets)
+        # Use similar thresholds as RSI+BB (8 bps high, 2 bps low)
+        if vol_bps > 8.0:
+            cooldown *= 1.5  # 50% longer in high vol
+            LOG.debug(f"[renko_ao] high volatility ({vol_bps:.1f} bps), extending cooldown to {cooldown:.1f}s")
+        elif vol_bps < 2.0:
+            cooldown *= 0.8  # 20% shorter in low vol (smoother markets)
+            LOG.debug(f"[renko_ao] low volatility ({vol_bps:.1f} bps), reducing cooldown to {cooldown:.1f}s")
+        
+        # Increase cooldown if recent exits were stop losses (prevent re-entry into losing trades)
+        stop_loss_count = sum(1 for r in self._recent_exit_reasons if r == "stop_loss")
+        if stop_loss_count >= 2:
+            cooldown *= 1.3  # 30% longer after multiple stop losses
+            LOG.debug(f"[renko_ao] {stop_loss_count} recent stop losses, extending cooldown to {cooldown:.1f}s")
+        
+        # Increase cooldown during losing streak
+        if self._losing_streak >= 2:
+            cooldown *= 1.2  # 20% longer during losing streak
+            LOG.debug(f"[renko_ao] losing streak {self._losing_streak}, extending cooldown to {cooldown:.1f}s")
+        
+        # Cap cooldown at reasonable maximum (60 seconds)
+        self._exit_cooldown_seconds = min(cooldown, 60.0)
+    
     def _update_telemetry(self, indicators: Optional[Indicators], price: Optional[float]) -> None:
         """Update telemetry metrics."""
         if not self.telemetry or indicators is None:

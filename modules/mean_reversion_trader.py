@@ -851,7 +851,7 @@ class MeanReversionTrader:
                                 raise  # Last attempt, re-raise
                         else:
                             raise  # Other errors, re-raise immediately
-                
+
                 if order is None:
                     raise RuntimeError(f"Failed to create exit order after {max_retries} attempts")
 
@@ -877,7 +877,7 @@ class MeanReversionTrader:
 
                 # Track exit reason for adaptive cooldown
                 self._recent_exit_reasons.append(reason)
-                
+
                 # Track recent performance for adaptive trading
                 self._recent_pnl.append(pnl_pct)
                 if pnl_pct < 0:
@@ -938,10 +938,10 @@ class MeanReversionTrader:
         if indicators is None:
             self._exit_cooldown_seconds = self._base_exit_cooldown_seconds
             return
-        
+
         # Start with base cooldown
         cooldown = self._base_exit_cooldown_seconds
-        
+
         # Increase cooldown in high volatility (choppy markets)
         vol = indicators.volatility_bps
         if vol > self.vol_high_threshold:
@@ -950,21 +950,21 @@ class MeanReversionTrader:
         elif vol < self.vol_low_threshold:
             cooldown *= 0.8  # 20% shorter in low vol (smoother markets)
             LOG.debug(f"[mean_reversion] low volatility ({vol:.1f} bps), reducing cooldown to {cooldown:.1f}s")
-        
+
         # Increase cooldown if recent exits were stop losses (prevent re-entry into losing trades)
         stop_loss_count = sum(1 for r in self._recent_exit_reasons if r == "stop_loss")
         if stop_loss_count >= 2:
             cooldown *= 1.3  # 30% longer after multiple stop losses
             LOG.debug(f"[mean_reversion] {stop_loss_count} recent stop losses, extending cooldown to {cooldown:.1f}s")
-        
+
         # Increase cooldown during losing streak
         if self._losing_streak >= 2:
             cooldown *= 1.2  # 20% longer during losing streak
             LOG.debug(f"[mean_reversion] losing streak {self._losing_streak}, extending cooldown to {cooldown:.1f}s")
-        
+
         # Cap cooldown at reasonable maximum (60 seconds)
         self._exit_cooldown_seconds = min(cooldown, 60.0)
-    
+
     async def _cancel_stale_orders(self) -> None:
         """Cancel orders that haven't filled after timeout."""
         if not self.trading_client or self.dry_run:
