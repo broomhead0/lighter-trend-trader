@@ -15,10 +15,10 @@ while true; do
     echo "Iteration $ITERATION - $(date)"
     echo "=========================================="
     echo ""
-    
+
     python3 scripts/auto_optimize.py
     EXIT_CODE=$?
-    
+
     echo ""
     if [ $EXIT_CODE -eq 0 ]; then
         echo "✅ All strategies are PROFITABLE!"
@@ -29,11 +29,11 @@ while true; do
     else
         echo "⚠️  Strategies need optimization. Waiting 2 hours before next check..."
     fi
-    
+
     echo ""
     echo "Next check in 2 hours..."
     echo ""
-    
+
     sleep 7200  # 2 hours
     ITERATION=$((ITERATION + 1))
 done
