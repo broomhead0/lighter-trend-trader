@@ -23,7 +23,7 @@
 
 ---
 
-## Two Trading Strategies
+## Three Trading Strategies
 
 ### 1. RSI + BB Strategy (Trend Following)
 **File:** `modules/mean_reversion_trader.py`

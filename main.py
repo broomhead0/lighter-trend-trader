@@ -14,6 +14,7 @@ from core.state_store import StateStore
 from core.trading_client import TradingClient, TradingConfig
 from modules.mean_reversion_trader import MeanReversionTrader
 from modules.renko_ao_trader import RenkoAOTrader
+from modules.breakout_trader import BreakoutTrader
 from modules.ws_price_feed import WebSocketPriceFeed
 from modules.pnl_tracker import PnLTracker
 
@@ -93,6 +94,24 @@ def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
         cfg.setdefault("renko_ao", {}).setdefault("api", {})["api_key_index"] = int(os.environ["RENKO_AO_API_KEY_INDEX"])
     if os.environ.get("RENKO_AO_API_KEY_PRIVATE_KEY"):
         cfg.setdefault("renko_ao", {}).setdefault("api", {})["key"] = os.environ["RENKO_AO_API_KEY_PRIVATE_KEY"]
+
+    # Breakout strategy config
+    if os.environ.get("BREAKOUT_ENABLED"):
+        cfg.setdefault("breakout", {})["enabled"] = os.environ["BREAKOUT_ENABLED"].lower() == "true"
+    if os.environ.get("BREAKOUT_DRY_RUN"):
+        cfg.setdefault("breakout", {})["dry_run"] = os.environ["BREAKOUT_DRY_RUN"].lower() == "true"
+    if os.environ.get("BREAKOUT_MARKET"):
+        cfg.setdefault("breakout", {})["market"] = os.environ["BREAKOUT_MARKET"]
+    if os.environ.get("BREAKOUT_CANDLE_INTERVAL_SECONDS"):
+        cfg.setdefault("breakout", {})["candle_interval_seconds"] = int(os.environ["BREAKOUT_CANDLE_INTERVAL_SECONDS"])
+
+    # Breakout per-strategy account config (optional, falls back to shared)
+    if os.environ.get("BREAKOUT_ACCOUNT_INDEX"):
+        cfg.setdefault("breakout", {}).setdefault("api", {})["account_index"] = int(os.environ["BREAKOUT_ACCOUNT_INDEX"])
+    if os.environ.get("BREAKOUT_API_KEY_INDEX"):
+        cfg.setdefault("breakout", {}).setdefault("api", {})["api_key_index"] = int(os.environ["BREAKOUT_API_KEY_INDEX"])
+    if os.environ.get("BREAKOUT_API_KEY_PRIVATE_KEY"):
+        cfg.setdefault("breakout", {}).setdefault("api", {})["key"] = os.environ["BREAKOUT_API_KEY_PRIVATE_KEY"]
 
 
 def setup_logging():
@@ -247,13 +266,39 @@ async def main():
     else:
         LOG.info("Renko + AO trader disabled")
 
-    if not rsi_bb_trader and not renko_ao_trader:
+    # Initialize Breakout trader
+    breakout_trader: Optional[BreakoutTrader] = None
+    breakout_cfg = cfg.get("breakout") or {}
+    if breakout_cfg.get("enabled", False):
+        try:
+            # Use strategy-specific trading client if configured, otherwise use shared
+            breakout_api_cfg = breakout_cfg.get("api")
+            breakout_trading_client = create_trading_client(breakout_api_cfg) if breakout_api_cfg else shared_trading_client
+
+            breakout_trader = BreakoutTrader(
+                config=cfg,
+                state=state,
+                trading_client=breakout_trading_client,
+                alert_manager=None,
+                telemetry=None,
+            )
+            breakout_trader.pnl_tracker = pnl_tracker  # Attach PnL tracker
+            if breakout_api_cfg:
+                LOG.info(f"Breakout trader initialized with dedicated account {breakout_api_cfg.get('account_index')}")
+            else:
+                LOG.info("Breakout trader initialized (using shared account)")
+        except Exception as exc:
+            LOG.exception(f"Failed to initialize Breakout trader: {exc}")
+    else:
+        LOG.info("Breakout trader disabled")
+
+    if not rsi_bb_trader and not renko_ao_trader and not breakout_trader:
         LOG.error("No traders enabled! Enable at least one strategy in config.")
         sys.exit(1)
 
     # Initialize WebSocket price feed to update state with current prices
     # Use market from first enabled trader
-    market = rsi_bb_cfg.get("market") or renko_ao_cfg.get("market") or "market:2"
+    market = rsi_bb_cfg.get("market") or renko_ao_cfg.get("market") or breakout_cfg.get("market") or "market:2"
     price_feed = WebSocketPriceFeed(
         config=cfg,
         state=state,
@@ -282,6 +327,8 @@ async def main():
         tasks.append(rsi_bb_trader.run())
     if renko_ao_trader:
         tasks.append(renko_ao_trader.run())
+    if breakout_trader:
+        tasks.append(breakout_trader.run())
 
     try:
         await asyncio.gather(*tasks, return_exceptions=True)
@@ -294,6 +341,8 @@ async def main():
             await rsi_bb_trader.stop()
         if renko_ao_trader:
             await renko_ao_trader.stop()
+        if breakout_trader:
+            await breakout_trader.stop()
         # Close all trading clients
         clients_to_close = []
         if shared_trading_client:
@@ -302,6 +351,8 @@ async def main():
             clients_to_close.append(rsi_bb_trader.trading_client)
         if renko_ao_trader and renko_ao_trader.trading_client and renko_ao_trader.trading_client != shared_trading_client:
             clients_to_close.append(renko_ao_trader.trading_client)
+        if breakout_trader and breakout_trader.trading_client and breakout_trader.trading_client != shared_trading_client:
+            clients_to_close.append(breakout_trader.trading_client)
 
         for client in clients_to_close:
             try:

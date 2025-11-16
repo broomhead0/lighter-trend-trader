@@ -95,3 +95,48 @@ renko_ao:
   max_position_size: 0.1  # Maximum SOL per trade (for $100 account, ~$14 notional at ~141 SOL)
   min_position_size: 0.1  # Minimum SOL per trade (ensures minimum notional requirement is met)
 
+# Breakout + Momentum Strategy
+breakout:
+  enabled: false  # Set to true to enable Breakout strategy
+  dry_run: true  # Set to false for live trading (start with true!)
+  market: market:2  # SOL market
+  candle_interval_seconds: 900  # 15 minutes default (good for breakouts)
+
+  # Optional: Per-strategy account config (for account separation)
+  # If not provided, falls back to shared api config above
+  # api:
+  #   account_index: 281474976639273  # Breakout dedicated account
+  #   api_key_index: 17
+  #   key: ""  # API key private key for this account
+
+  # Indicator parameters
+  ema_fast_period: 20  # 20-period EMA
+  ema_slow_period: 50  # 50-period EMA
+  rsi_period: 14
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  atr_period: 14
+  bb_period: 20
+  bb_std: 2.0
+  breakout_lookback: 30  # Number of candles to look back for recent high/low
+
+  # Entry filters
+  rsi_bullish_threshold: 60.0  # RSI >60 for long entries
+  rsi_bearish_threshold: 40.0  # RSI <40 for short entries
+  atr_min_bps: 3.0  # Minimum volatility (3 bps)
+  atr_max_bps: 15.0  # Maximum volatility (15 bps)
+  min_atr_expansion: 1.1  # ATR must be 10% higher than recent average
+
+  # Risk management (ATR-based)
+  take_profit_atr_multiplier: 2.5  # Take profit at 2.5x ATR
+  stop_loss_atr_multiplier: 1.5  # Stop loss at 1.5x ATR below/above breakout level
+  trailing_stop_activation_atr: 1.0  # Activate trailing after 1x ATR profit
+  trailing_stop_distance_atr: 0.5  # Trail by 0.5x ATR
+  max_hold_minutes: 60  # Maximum time to hold position (60 minutes)
+  no_movement_minutes: 30  # Exit if no progress after 30 minutes
+
+  # Position sizing
+  max_position_size: 0.1  # Maximum SOL per trade
+  min_position_size: 0.1  # Minimum SOL per trade
+
