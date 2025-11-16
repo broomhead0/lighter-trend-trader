@@ -159,7 +159,7 @@ class MeanReversionTrader:
         self._order_timestamps: Dict[int, float] = {}  # client_order_index -> creation timestamp
         self._order_timeout_seconds = 30.0  # Cancel orders that haven't filled after 30 seconds
         self._stop = asyncio.Event()
-        
+
         # Recent momentum tracking (for entry filter)
         self._recent_candle_directions: Deque[str] = deque(maxlen=5)  # Track last 5 candle directions
 
