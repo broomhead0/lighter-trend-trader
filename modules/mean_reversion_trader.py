@@ -789,7 +789,7 @@ class MeanReversionTrader:
                                 raise  # Last attempt, re-raise
                         else:
                             raise  # Other errors, re-raise immediately
-                
+
                 if order is None:
                     LOG.error(f"[mean_reversion] failed to create entry order after {max_retries} attempts, skipping entry")
                     return
