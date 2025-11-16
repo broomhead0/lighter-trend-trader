@@ -1,6 +1,6 @@
 # Master Context Document - Lighter Trend Trader
 
-**Last Updated:** 2025-11-15 (evening - adaptive trading features added)
+**Last Updated:** 2025-11-16 (deep dive optimization - ultra-selective approach)
 **Purpose:** This document contains all critical context needed to understand and work with this project when context is lost.
 
 ---
@@ -11,7 +11,7 @@
 **Purpose:** Dual-strategy trading bot for SOL on Lighter.xyz exchange
 **Deployment:** Railway (auto-deploys from GitHub)
 **Language:** Python 3.11
-**Trading Mode:** LIVE TRADING (tiny sizes: 0.001-0.005 SOL)
+**Trading Mode:** LIVE TRADING (ultra-selective, quality over quantity - 1-3 trades/day target)
 **Account:** `281474976639501` (Account #2, separate from market maker bot at 366110)
 **API Key Index:** `16`
 
@@ -559,6 +559,46 @@ python scripts/test_order.py --account-index 281474976639501 --api-key-index 16 
   - Strategies can have opposing signals (one long, one short) - this is normal
   - Each manages its own positions independently
   - No conflicts - they can both trade simultaneously
+
+---
+
+## Deep Dive Optimization (2025-11-16)
+
+### Goal
+**Quality over quantity**: Even 1 trade/day is acceptable if highly profitable. Ultra-selective approach targeting >70% win rate.
+
+### Current Status
+- **Overall Performance**: 33.3% win rate, -0.28% PnL (needs improvement)
+- **RSI+BB**: 40% WR, R:R 1.18:1, -0.21% PnL
+- **Renko+AO**: 25% WR, R:R 2.10:1, -0.07% PnL
+
+### Optimization Strategy
+1. **Ultra-Selective Entry Filters** (implemented)
+   - RSI+BB: RSI >70 (long) or <30 (short), BB 0.2-0.3 or 0.7-0.8, Vol 3-8 bps, EMA divergence >5 bps
+   - Renko+AO: Divergence >0.1, BB <0.2 or >0.8, AO >0.15 or <-0.15, ATR 3-8 bps
+   
+2. **Enhanced Logging** (implemented)
+   - Comprehensive entry/exit condition logging
+   - MFE/MAE tracking
+   - Market context capture
+   
+3. **Exit Optimization** (implemented)
+   - Wider stops (10 bps) for high-probability setups
+   - Trailing stops for winners
+   - Optimized time stops
+
+4. **Data Collection** (ongoing)
+   - Collecting comprehensive trade data
+   - Pattern analysis to identify best setups
+   - Iterative refinement
+
+### Expected Outcomes
+- **Trade Frequency**: 1-3 trades/day (down from 10+)
+- **Win Rate Target**: >70% (up from 33%)
+- **R:R Target**: >2:1 (maintain current)
+- **PnL Target**: >0.5% per day
+
+See `DEEP_DIVE_PLAN.md` for full details.
 
 ---
 

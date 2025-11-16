@@ -21,6 +21,7 @@ import math
 import time
 from collections import deque
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
@@ -114,20 +115,29 @@ class MeanReversionTrader:
         self.atr_period = int(trader_cfg.get("atr_period", 14))
         self.volume_ma_period = int(trader_cfg.get("volume_ma_period", 20))
 
-        # Entry filters (trend following)
+        # Entry filters (ULTRA-SELECTIVE - quality over quantity)
         self.rsi_bullish_threshold = float(trader_cfg.get("rsi_bullish_threshold", 50.0))  # RSI > 50 for longs
         self.rsi_bearish_threshold = float(trader_cfg.get("rsi_bearish_threshold", 50.0))  # RSI < 50 for shorts
-        self.rsi_momentum_strength = float(trader_cfg.get("rsi_momentum_strength", 15.0))  # RSI must be at least this far from 50 (tightened from 10.0 for better win rate)
-        self.bb_position_threshold = float(trader_cfg.get("bb_position_threshold", 0.3))  # Price within 30% of BB middle
+        self.rsi_momentum_strength = float(trader_cfg.get("rsi_momentum_strength", 20.0))  # ULTRA-SELECTIVE: RSI >70 (long) or <30 (short) - EXTREME momentum only
+        self.bb_position_threshold = float(trader_cfg.get("bb_position_threshold", 0.1))  # ULTRA-SELECTIVE: BB 0.2-0.3 (long) or 0.7-0.8 (short) - near edges
         self.volume_multiplier = float(trader_cfg.get("volume_multiplier", 1.2))  # Volume must be 1.2x average
-        self.vol_min_bps = float(trader_cfg.get("vol_min_bps", 2.0))  # Minimum volatility to trade
-        self.vol_max_bps = float(trader_cfg.get("vol_max_bps", 25.0))  # Maximum volatility to trade
-        self.trend_confirmation_bps = float(trader_cfg.get("trend_confirmation_bps", 2.0))  # Min EMA divergence for trend confirmation
+        self.vol_min_bps = float(trader_cfg.get("vol_min_bps", 3.0))  # ULTRA-SELECTIVE: Minimum 3 bps (sweet spot)
+        self.vol_max_bps = float(trader_cfg.get("vol_max_bps", 8.0))  # ULTRA-SELECTIVE: Maximum 8 bps (avoid high vol whipsaw)
+        self.trend_confirmation_bps = float(trader_cfg.get("trend_confirmation_bps", 5.0))  # ULTRA-SELECTIVE: EMA divergence >5 bps - strong trend only
 
-        # Risk management
-        self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 5.0))  # Increased from 4.5 to improve R:R (target 1.11:1)
-        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 4.5))  # Tightened from 5.0 to 4.5 to improve R:R while maintaining win rate
-        self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 8))  # Increased from 5 to reduce time stops
+        # Risk management (ULTRA-SELECTIVE - wider stops for high-probability setups)
+        self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 6.0))  # Wider TP for high-probability setups
+        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 10.0))  # ULTRA-SELECTIVE: Wider stops (10 bps) for high-probability setups
+        self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 10))  # Longer time stop for high-probability setups
+        
+        # Trailing stop parameters
+        self.enable_trailing_stop = bool(trader_cfg.get("enable_trailing_stop", True))  # Enable trailing stops for winners
+        self.trailing_stop_activation_bps = float(trader_cfg.get("trailing_stop_activation_bps", 3.0))  # Activate trailing after 3 bps profit
+        self.trailing_stop_distance_bps = float(trader_cfg.get("trailing_stop_distance_bps", 2.0))  # Trail by 2 bps
+        
+        # MFE/MAE tracking for analysis
+        self._mfe_tracker: Dict[str, float] = {}  # position_id -> max favorable excursion
+        self._mae_tracker: Dict[str, float] = {}  # position_id -> max adverse excursion
 
         # Adaptive parameters based on volatility
         self.vol_low_threshold = float(trader_cfg.get("vol_low_threshold", 2.0))  # Below this = low vol, reduce size
@@ -371,6 +381,7 @@ class MeanReversionTrader:
         # Get or create current candle
         if not self._candles or self._candles[-1].open_time < current_candle_time:
             # New candle period - create new candle
+            prev_close = self._candles[-1].close if self._candles else price
             new_candle = Candle(
                 open_time=current_candle_time,
                 open=price,
@@ -383,6 +394,13 @@ class MeanReversionTrader:
             # Keep only last 200 candles (more for smaller timeframes)
             if len(self._candles) > 200:
                 self._candles = self._candles[-200:]
+            # Track recent momentum
+            if price > prev_close:
+                self._recent_candle_directions.append("up")
+            elif price < prev_close:
+                self._recent_candle_directions.append("down")
+            else:
+                self._recent_candle_directions.append("neutral")
             LOG.info(f"[mean_reversion] created new candle at {current_candle_time} ({self.candle_interval_seconds}s), price={price:.2f}, total candles: {len(self._candles)}")
         else:
             # Update current candle
@@ -559,28 +577,50 @@ class MeanReversionTrader:
         else:
             bb_position = 0.5
 
-        # Long signal: RSI > 50 (bullish momentum) + price near/above BB middle + EMA trend confirmation
-        rsi_bullish = indicators.rsi > (self.rsi_bullish_threshold + self.rsi_momentum_strength)
-        price_above_middle = bb_position >= (0.5 - self.bb_position_threshold)  # Within threshold of middle or above
+        # ULTRA-SELECTIVE: Long signal - EXTREME momentum only
+        rsi_bullish = indicators.rsi > (self.rsi_bullish_threshold + self.rsi_momentum_strength)  # RSI >70
+        # ULTRA-SELECTIVE: BB position 0.2-0.3 (near lower edge, not extreme)
+        price_in_optimal_zone = (bb_position >= 0.2 and bb_position <= 0.3) or (bb_position >= 0.7 and bb_position <= 0.8)
         ema_bullish = indicators.ema_fast > indicators.ema_slow
         ema_trend_strength = abs(indicators.ema_fast - indicators.ema_slow) / indicators.ema_slow * 10000
-        trend_confirmed = ema_trend_strength >= self.trend_confirmation_bps
+        trend_confirmed = ema_trend_strength >= self.trend_confirmation_bps  # EMA divergence >5 bps
+        
+        # ULTRA-SELECTIVE: Recent momentum filter (last 3 candles should be in same direction)
+        recent_momentum_bullish = len([d for d in list(self._recent_candle_directions)[-3:] if d == "up"]) >= 2
 
-        if rsi_bullish and price_above_middle and ema_bullish and trend_confirmed:
-            strength = min(1.0, (indicators.rsi - self.rsi_bullish_threshold) / 50.0)  # Strength based on RSI above 50
-            LOG.info(f"[mean_reversion] LONG signal (trend following): RSI={indicators.rsi:.1f} (need >{self.rsi_bullish_threshold + self.rsi_momentum_strength:.1f}), BB_pos={bb_position:.2f}, EMA_fast={indicators.ema_fast:.2f} > EMA_slow={indicators.ema_slow:.2f}, price={price:.2f}")
-            return self._create_signal("long", price, indicators, strength, "RSI bullish + BB middle + EMA trend")
+        if rsi_bullish and price_in_optimal_zone and ema_bullish and trend_confirmed and recent_momentum_bullish:
+            strength = min(1.0, (indicators.rsi - self.rsi_bullish_threshold) / 50.0)
+            # ENHANCED LOGGING: Capture all entry conditions
+            hour = datetime.fromtimestamp(time.time()).hour
+            minute = datetime.fromtimestamp(time.time()).minute
+            LOG.info(f"[mean_reversion] ENTRY CONDITIONS: "
+                     f"RSI={indicators.rsi:.1f}, BB_pos={bb_position:.2f}, Vol={vol:.1f}bps, "
+                     f"EMA_diff={ema_trend_strength:.1f}bps, Price={price:.2f}, "
+                     f"Time={hour:02d}:{minute:02d}, Recent_momentum={'up' if recent_momentum_bullish else 'mixed'}")
+            LOG.info(f"[mean_reversion] LONG signal (ULTRA-SELECTIVE): RSI={indicators.rsi:.1f} (need >{self.rsi_bullish_threshold + self.rsi_momentum_strength:.1f}), BB_pos={bb_position:.2f}, EMA_fast={indicators.ema_fast:.2f} > EMA_slow={indicators.ema_slow:.2f}, price={price:.2f}")
+            return self._create_signal("long", price, indicators, strength, "ULTRA-SELECTIVE: RSI >70 + BB 0.2-0.3 + EMA >5bps + momentum")
 
-        # Short signal: RSI < 50 (bearish momentum) + price near/below BB middle + EMA trend confirmation
-        rsi_bearish = indicators.rsi < (self.rsi_bearish_threshold - self.rsi_momentum_strength)
-        price_below_middle = bb_position <= (0.5 + self.bb_position_threshold)  # Within threshold of middle or below
+        # ULTRA-SELECTIVE: Short signal - EXTREME momentum only
+        rsi_bearish = indicators.rsi < (self.rsi_bearish_threshold - self.rsi_momentum_strength)  # RSI <30
+        # ULTRA-SELECTIVE: BB position 0.7-0.8 (near upper edge, not extreme)
+        price_in_optimal_zone = (bb_position >= 0.2 and bb_position <= 0.3) or (bb_position >= 0.7 and bb_position <= 0.8)
         ema_bearish = indicators.ema_fast < indicators.ema_slow
-        trend_confirmed = ema_trend_strength >= self.trend_confirmation_bps
+        trend_confirmed = ema_trend_strength >= self.trend_confirmation_bps  # EMA divergence >5 bps
+        
+        # ULTRA-SELECTIVE: Recent momentum filter (last 3 candles should be in same direction)
+        recent_momentum_bearish = len([d for d in list(self._recent_candle_directions)[-3:] if d == "down"]) >= 2
 
-        if rsi_bearish and price_below_middle and ema_bearish and trend_confirmed:
-            strength = min(1.0, (self.rsi_bearish_threshold - indicators.rsi) / 50.0)  # Strength based on RSI below 50
-            LOG.info(f"[mean_reversion] SHORT signal (trend following): RSI={indicators.rsi:.1f} (need <{self.rsi_bearish_threshold - self.rsi_momentum_strength:.1f}), BB_pos={bb_position:.2f}, EMA_fast={indicators.ema_fast:.2f} < EMA_slow={indicators.ema_slow:.2f}, price={price:.2f}")
-            return self._create_signal("short", price, indicators, strength, "RSI bearish + BB middle + EMA trend")
+        if rsi_bearish and price_in_optimal_zone and ema_bearish and trend_confirmed and recent_momentum_bearish:
+            strength = min(1.0, (self.rsi_bearish_threshold - indicators.rsi) / 50.0)
+            # ENHANCED LOGGING: Capture all entry conditions
+            hour = datetime.fromtimestamp(time.time()).hour
+            minute = datetime.fromtimestamp(time.time()).minute
+            LOG.info(f"[mean_reversion] ENTRY CONDITIONS: "
+                     f"RSI={indicators.rsi:.1f}, BB_pos={bb_position:.2f}, Vol={vol:.1f}bps, "
+                     f"EMA_diff={ema_trend_strength:.1f}bps, Price={price:.2f}, "
+                     f"Time={hour:02d}:{minute:02d}, Recent_momentum={'down' if recent_momentum_bearish else 'mixed'}")
+            LOG.info(f"[mean_reversion] SHORT signal (ULTRA-SELECTIVE): RSI={indicators.rsi:.1f} (need <{self.rsi_bearish_threshold - self.rsi_momentum_strength:.1f}), BB_pos={bb_position:.2f}, EMA_fast={indicators.ema_fast:.2f} < EMA_slow={indicators.ema_slow:.2f}, price={price:.2f}")
+            return self._create_signal("short", price, indicators, strength, "ULTRA-SELECTIVE: RSI <30 + BB 0.7-0.8 + EMA >5bps + momentum")
 
         return None
 
@@ -665,7 +705,7 @@ class MeanReversionTrader:
         )
 
     def _check_exit(self, price: float, indicators: Indicators) -> Optional[str]:
-        """Check for exit signals."""
+        """Check for exit signals with trailing stops and MFE/MAE tracking."""
         if not self._current_position:
             return None
 
@@ -675,6 +715,43 @@ class MeanReversionTrader:
         stop_loss = pos["stop_loss"]
         take_profit = pos["take_profit"]
         entry_time = pos["entry_time"]
+        position_id = f"{side}_{entry_price}_{entry_time}"
+
+        # Calculate current PnL for MFE/MAE tracking
+        if side == "long":
+            current_pnl_pct = (price - entry_price) / entry_price * 100
+        else:
+            current_pnl_pct = (entry_price - price) / entry_price * 100
+        
+        # Track MFE (Maximum Favorable Excursion)
+        if position_id not in self._mfe_tracker:
+            self._mfe_tracker[position_id] = current_pnl_pct
+        else:
+            self._mfe_tracker[position_id] = max(self._mfe_tracker[position_id], current_pnl_pct)
+        
+        # Track MAE (Maximum Adverse Excursion)
+        if position_id not in self._mae_tracker:
+            self._mae_tracker[position_id] = current_pnl_pct
+        else:
+            self._mae_tracker[position_id] = min(self._mae_tracker[position_id], current_pnl_pct)
+
+        # Trailing stop (ULTRA-SELECTIVE: lock in profits)
+        if self.enable_trailing_stop:
+            mfe = self._mfe_tracker.get(position_id, 0.0)
+            if mfe >= self.trailing_stop_activation_bps:  # Activate after 3 bps profit
+                # Calculate trailing stop level
+                if side == "long":
+                    trailing_stop = price - (entry_price * self.trailing_stop_distance_bps / 10000)
+                    if trailing_stop > stop_loss:  # Only tighten, never widen
+                        pos["stop_loss"] = trailing_stop
+                        stop_loss = trailing_stop
+                        LOG.debug(f"[mean_reversion] trailing stop activated: MFE={mfe:.2f}%, new stop={stop_loss:.2f}")
+                else:  # short
+                    trailing_stop = price + (entry_price * self.trailing_stop_distance_bps / 10000)
+                    if trailing_stop < stop_loss:  # Only tighten, never widen
+                        pos["stop_loss"] = trailing_stop
+                        stop_loss = trailing_stop
+                        LOG.debug(f"[mean_reversion] trailing stop activated: MFE={mfe:.2f}%, new stop={stop_loss:.2f}")
 
         # Stop loss
         if side == "long" and price <= stop_loss:
@@ -898,12 +975,43 @@ class MeanReversionTrader:
                 # Cancel all other stale orders
                 await self._cancel_stale_orders()
 
+                # Calculate MFE/MAE for enhanced logging
+                position_id = f"{pos['side']}_{pos['entry_price']}_{pos['entry_time']}"
+                mfe = self._mfe_tracker.get(position_id, pnl_pct)
+                mae = self._mae_tracker.get(position_id, pnl_pct)
+                time_in_trade = time.time() - pos["entry_time"]
+                
+                # Check if TP/SL was reached
+                reached_tp = False
+                reached_sl = False
+                if pos["side"] == "long":
+                    reached_tp = current_price >= pos["take_profit"]
+                    reached_sl = current_price <= pos["stop_loss"]
+                else:
+                    reached_tp = current_price <= pos["take_profit"]
+                    reached_sl = current_price >= pos["stop_loss"]
+                
+                # ENHANCED LOGGING: Capture all exit conditions
+                hour = datetime.fromtimestamp(time.time()).hour
+                minute = datetime.fromtimestamp(time.time()).minute
+                LOG.info(f"[mean_reversion] EXIT CONDITIONS: "
+                         f"Reason={reason}, Time_in_trade={time_in_trade:.0f}s, "
+                         f"MFE={mfe:.2f}%, MAE={mae:.2f}%, "
+                         f"Reached_TP={reached_tp}, Reached_SL={reached_sl}, "
+                         f"Time={hour:02d}:{minute:02d}")
+                
                 # Log live PnL
                 LOG.info("[mean_reversion] LIVE PnL: %.2f%% (entry=%.2f, exit=%.2f, size=%.4f)",
                          pnl_pct, pos["entry_price"], current_price, pos["size"])
 
                 # Track exit reason for adaptive cooldown
                 self._recent_exit_reasons.append(reason)
+                
+                # Clean up MFE/MAE tracking
+                if position_id in self._mfe_tracker:
+                    del self._mfe_tracker[position_id]
+                if position_id in self._mae_tracker:
+                    del self._mae_tracker[position_id]
 
                 # Track recent performance for adaptive trading
                 self._recent_pnl.append(pnl_pct)

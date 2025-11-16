@@ -123,7 +123,7 @@ Given your preference for quality over quantity, I recommend **Option A (Conserv
 1. **Tighten entry filters significantly**
    - RSI+BB: Require RSI >70 (long) or <30 (short) + strong trend
    - Renko+AO: Require divergence strength >0.1 + BB enhancement
-   
+
 2. **Add market regime filters**
    - Only trade in optimal volatility (3-8 bps)
    - Avoid choppy markets (volatility <2 bps)

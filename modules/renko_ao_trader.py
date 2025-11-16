@@ -21,6 +21,7 @@ import math
 import time
 from collections import deque
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
@@ -116,14 +117,30 @@ class RenkoAOTrader:
         self.bb_period = int(trader_cfg.get("bb_period", 20))
         self.bb_std = float(trader_cfg.get("bb_std", 2.0))
 
-        # Entry filters
-        self.bb_enhancement_threshold = float(trader_cfg.get("bb_enhancement_threshold", 0.2))  # Within 20% of BB edge
-        self.min_divergence_strength = float(trader_cfg.get("min_divergence_strength", 0.05))  # Increased from 0.03 to be more selective (need 35.9% WR, currently 23.5%)
+        # Entry filters (ULTRA-SELECTIVE - quality over quantity)
+        self.bb_enhancement_threshold = float(trader_cfg.get("bb_enhancement_threshold", 0.1))  # ULTRA-SELECTIVE: BB <0.2 or >0.8 - extreme positions only
+        self.min_divergence_strength = float(trader_cfg.get("min_divergence_strength", 0.1))  # ULTRA-SELECTIVE: Divergence >0.1 - strong divergence only
+        self.min_ao_strength = float(trader_cfg.get("min_ao_strength", 0.15))  # ULTRA-SELECTIVE: AO >0.15 or <-0.15 - strong momentum
+        self.min_bricks_since_divergence = int(trader_cfg.get("min_bricks_since_divergence", 3))  # ULTRA-SELECTIVE: At least 3 bricks since divergence started
+        self.optimal_atr_min_bps = float(trader_cfg.get("optimal_atr_min_bps", 3.0))  # ULTRA-SELECTIVE: ATR 3-8 bps
+        self.optimal_atr_max_bps = float(trader_cfg.get("optimal_atr_max_bps", 8.0))
 
-        # Risk management
-        self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 12.0))  # Increased from 10.0 for better R:R
-        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 7.0))  # Tightened from 8.0 to 7.0 to improve win rate (R:R already good at 1.79:1)
-        self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 8))  # Increased from 5 to reduce time stops
+        # Risk management (ULTRA-SELECTIVE - wider stops for high-probability setups)
+        self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 14.0))  # Wider TP for high-probability setups
+        self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 10.0))  # ULTRA-SELECTIVE: Wider stops (10 bps) for high-probability setups
+        self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 10))  # Longer time stop for high-probability setups
+        
+        # Trailing stop parameters
+        self.enable_trailing_stop = bool(trader_cfg.get("enable_trailing_stop", True))  # Enable trailing stops for winners
+        self.trailing_stop_activation_bps = float(trader_cfg.get("trailing_stop_activation_bps", 4.0))  # Activate trailing after 4 bps profit
+        self.trailing_stop_distance_bps = float(trader_cfg.get("trailing_stop_distance_bps", 2.0))  # Trail by 2 bps
+        
+        # MFE/MAE tracking for analysis
+        self._mfe_tracker: Dict[str, float] = {}  # position_id -> max favorable excursion
+        self._mae_tracker: Dict[str, float] = {}  # position_id -> max adverse excursion
+        
+        # Divergence tracking for confirmation
+        self._divergence_start_brick: Dict[str, int] = {}  # divergence_type -> brick index when it started
         self.risk_per_trade_pct = float(trader_cfg.get("risk_per_trade_pct", 1.0))
         # Position sizes - Lighter minimum is 0.001 SOL, but there may be a minimum notional requirement
         # At ~141 SOL price, 0.05 SOL = ~$7 notional (still rejected with code=21706)
@@ -479,27 +496,65 @@ class RenkoAOTrader:
     # ------------------------- Signal Generation -------------------------
 
     def _check_entry(self, price: float, indicators: Indicators) -> Optional[Signal]:
-        """Check for entry signals based on divergence."""
+        """Check for entry signals based on divergence (ULTRA-SELECTIVE)."""
         if indicators.divergence_type is None:
             return None
 
+        # ULTRA-SELECTIVE: Divergence strength >0.1
         if indicators.divergence_strength < self.min_divergence_strength:
+            LOG.debug(f"[renko_ao] divergence strength {indicators.divergence_strength:.2f} < {self.min_divergence_strength:.2f}")
             return None
 
-        # Check BB enhancement
+        # ULTRA-SELECTIVE: AO strength >0.15 or <-0.15
+        ao_abs = abs(indicators.ao)
+        if ao_abs < self.min_ao_strength:
+            LOG.debug(f"[renko_ao] AO strength {ao_abs:.2f} < {self.min_ao_strength:.2f}")
+            return None
+
+        # ULTRA-SELECTIVE: ATR 3-8 bps (optimal volatility)
+        if self._current_renko_brick_size and price > 0:
+            atr_bps = (self._current_renko_brick_size / price) * 10000
+            if atr_bps < self.optimal_atr_min_bps or atr_bps > self.optimal_atr_max_bps:
+                LOG.debug(f"[renko_ao] ATR {atr_bps:.1f} bps not in optimal range {self.optimal_atr_min_bps}-{self.optimal_atr_max_bps}")
+                return None
+
+        # ULTRA-SELECTIVE: BB position <0.2 or >0.8 (extreme positions only)
         bb_enhanced = False
         if indicators.divergence_type == "bullish":
-            # Bullish divergence near lower BB
+            # Bullish divergence near lower BB (<0.2)
             if indicators.price_position_bb <= self.bb_enhancement_threshold:
                 bb_enhanced = True
         elif indicators.divergence_type == "bearish":
-            # Bearish divergence near upper BB
+            # Bearish divergence near upper BB (>0.8)
             if indicators.price_position_bb >= (1.0 - self.bb_enhancement_threshold):
                 bb_enhanced = True
+        
+        if not bb_enhanced:
+            LOG.debug(f"[renko_ao] BB position {indicators.price_position_bb:.2f} not in extreme zone")
+            return None
+
+        # ULTRA-SELECTIVE: At least 3 bricks since divergence started (confirmation)
+        divergence_key = indicators.divergence_type
+        if divergence_key not in self._divergence_start_brick:
+            self._divergence_start_brick[divergence_key] = len(self._renko_bricks)
+        bricks_since_divergence = len(self._renko_bricks) - self._divergence_start_brick[divergence_key]
+        if bricks_since_divergence < self.min_bricks_since_divergence:
+            LOG.debug(f"[renko_ao] only {bricks_since_divergence} bricks since divergence (need {self.min_bricks_since_divergence})")
+            return None
 
         # Create signal
         side = "long" if indicators.divergence_type == "bullish" else "short"
         strength = indicators.divergence_strength
+        
+        # ENHANCED LOGGING: Capture all entry conditions
+        hour = datetime.fromtimestamp(time.time()).hour
+        minute = datetime.fromtimestamp(time.time()).minute
+        atr_bps = (self._current_renko_brick_size / price) * 10000 if self._current_renko_brick_size and price > 0 else 0.0
+        LOG.info(f"[renko_ao] ENTRY CONDITIONS: "
+                 f"Divergence={indicators.divergence_type}, Strength={indicators.divergence_strength:.2f}, "
+                 f"AO={indicators.ao:.4f}, BB_pos={indicators.price_position_bb:.2f}, "
+                 f"ATR={atr_bps:.1f}bps, Bricks_since_div={bricks_since_divergence}, "
+                 f"Price={price:.2f}, Time={hour:02d}:{minute:02d}")
         if bb_enhanced:
             strength = min(1.0, strength * 1.5)  # Boost strength if BB enhanced
 
@@ -551,7 +606,7 @@ class RenkoAOTrader:
         )
 
     def _check_exit(self, price: float, indicators: Indicators) -> Optional[str]:
-        """Check for exit signals."""
+        """Check for exit signals with trailing stops and MFE/MAE tracking."""
         if not self._current_position:
             return None
 
@@ -561,6 +616,43 @@ class RenkoAOTrader:
         stop_loss = pos["stop_loss"]
         take_profit = pos["take_profit"]
         entry_time = pos["entry_time"]
+        position_id = f"{side}_{entry_price}_{entry_time}"
+
+        # Calculate current PnL for MFE/MAE tracking
+        if side == "long":
+            current_pnl_pct = (price - entry_price) / entry_price * 100
+        else:
+            current_pnl_pct = (entry_price - price) / entry_price * 100
+        
+        # Track MFE (Maximum Favorable Excursion)
+        if position_id not in self._mfe_tracker:
+            self._mfe_tracker[position_id] = current_pnl_pct
+        else:
+            self._mfe_tracker[position_id] = max(self._mfe_tracker[position_id], current_pnl_pct)
+        
+        # Track MAE (Maximum Adverse Excursion)
+        if position_id not in self._mae_tracker:
+            self._mae_tracker[position_id] = current_pnl_pct
+        else:
+            self._mae_tracker[position_id] = min(self._mae_tracker[position_id], current_pnl_pct)
+
+        # Trailing stop (ULTRA-SELECTIVE: lock in profits)
+        if self.enable_trailing_stop:
+            mfe = self._mfe_tracker.get(position_id, 0.0)
+            if mfe >= self.trailing_stop_activation_bps:  # Activate after 4 bps profit
+                # Calculate trailing stop level
+                if side == "long":
+                    trailing_stop = price - (entry_price * self.trailing_stop_distance_bps / 10000)
+                    if trailing_stop > stop_loss:  # Only tighten, never widen
+                        pos["stop_loss"] = trailing_stop
+                        stop_loss = trailing_stop
+                        LOG.debug(f"[renko_ao] trailing stop activated: MFE={mfe:.2f}%, new stop={stop_loss:.2f}")
+                else:  # short
+                    trailing_stop = price + (entry_price * self.trailing_stop_distance_bps / 10000)
+                    if trailing_stop < stop_loss:  # Only tighten, never widen
+                        pos["stop_loss"] = trailing_stop
+                        stop_loss = trailing_stop
+                        LOG.debug(f"[renko_ao] trailing stop activated: MFE={mfe:.2f}%, new stop={stop_loss:.2f}")
 
         # Stop loss
         if side == "long" and price <= stop_loss:
@@ -579,10 +671,11 @@ class RenkoAOTrader:
         if time.time() - entry_time > max_hold_seconds:
             return "time_stop"
 
-        # AO reversal (opposite trend)
-        if side == "long" and indicators.ao_trend == "bearish" and indicators.ao < 0:
+        # AO reversal (ULTRA-SELECTIVE: only if strong reversal >0.05 change)
+        ao_change = abs(indicators.ao - pos.get("entry_ao", indicators.ao))
+        if side == "long" and indicators.ao_trend == "bearish" and indicators.ao < 0 and ao_change > 0.05:
             return "ao_reversal"
-        if side == "short" and indicators.ao_trend == "bullish" and indicators.ao > 0:
+        if side == "short" and indicators.ao_trend == "bullish" and indicators.ao > 0 and ao_change > 0.05:
             return "ao_reversal"
 
         return None
@@ -625,6 +718,10 @@ class RenkoAOTrader:
 
             if self.dry_run:
                 LOG.info("[renko_ao] DRY RUN: would place %s order", order_side)
+                # Get current AO for tracking
+                current_indicators = self._compute_indicators(signal.entry_price)
+                entry_ao = current_indicators.ao if current_indicators else 0.0
+                
                 self._current_position = {
                     "side": signal.side,
                     "entry_price": signal.entry_price,
@@ -633,6 +730,7 @@ class RenkoAOTrader:
                     "stop_loss": signal.stop_loss,
                     "take_profit": signal.take_profit,
                     "entry_time": time.time(),
+                    "entry_ao": entry_ao,  # Store AO at entry for reversal tracking
                     "order_index": 0,
                 }
                 self._scaled_entries = []  # Reset scaled entries for new position
@@ -674,6 +772,11 @@ class RenkoAOTrader:
 
                 self._open_orders[order.client_order_index] = order
                 self._order_timestamps[order.client_order_index] = time.time()  # Track order creation time
+                
+                # Get current AO for tracking
+                current_indicators = self._compute_indicators(signal.entry_price)
+                entry_ao = current_indicators.ao if current_indicators else 0.0
+                
                 self._current_position = {
                     "side": signal.side,
                     "entry_price": signal.entry_price,
@@ -682,6 +785,7 @@ class RenkoAOTrader:
                     "stop_loss": signal.stop_loss,
                     "take_profit": signal.take_profit,
                     "entry_time": time.time(),
+                    "entry_ao": entry_ao,  # Store AO at entry for reversal tracking
                     "order_index": order.client_order_index,
                 }
                 self._scaled_entries = []  # Reset scaled entries for new position
@@ -797,12 +901,43 @@ class RenkoAOTrader:
                 # Cancel all other stale orders
                 await self._cancel_stale_orders()
 
+                # Calculate MFE/MAE for enhanced logging
+                position_id = f"{pos['side']}_{pos['entry_price']}_{pos['entry_time']}"
+                mfe = self._mfe_tracker.get(position_id, pnl_pct)
+                mae = self._mae_tracker.get(position_id, pnl_pct)
+                time_in_trade = time.time() - pos["entry_time"]
+                
+                # Check if TP/SL was reached
+                reached_tp = False
+                reached_sl = False
+                if pos["side"] == "long":
+                    reached_tp = current_price >= pos["take_profit"]
+                    reached_sl = current_price <= pos["stop_loss"]
+                else:
+                    reached_tp = current_price <= pos["take_profit"]
+                    reached_sl = current_price >= pos["stop_loss"]
+                
+                # ENHANCED LOGGING: Capture all exit conditions
+                hour = datetime.fromtimestamp(time.time()).hour
+                minute = datetime.fromtimestamp(time.time()).minute
+                LOG.info(f"[renko_ao] EXIT CONDITIONS: "
+                         f"Reason={reason}, Time_in_trade={time_in_trade:.0f}s, "
+                         f"MFE={mfe:.2f}%, MAE={mae:.2f}%, "
+                         f"Reached_TP={reached_tp}, Reached_SL={reached_sl}, "
+                         f"Time={hour:02d}:{minute:02d}")
+                
                 # Log live PnL
                 LOG.info("[renko_ao] LIVE PnL: %.2f%% (entry=%.2f, exit=%.2f, size=%.4f)",
                          pnl_pct, pos["entry_price"], current_price, pos["size"])
 
                 # Track exit reason for adaptive cooldown
                 self._recent_exit_reasons.append(reason)
+                
+                # Clean up MFE/MAE tracking
+                if position_id in self._mfe_tracker:
+                    del self._mfe_tracker[position_id]
+                if position_id in self._mae_tracker:
+                    del self._mae_tracker[position_id]
 
                 # Track recent performance for adaptive trading
                 self._recent_pnl.append(pnl_pct)
