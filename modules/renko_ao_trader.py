@@ -129,16 +129,16 @@ class RenkoAOTrader:
         self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 14.0))  # Wider TP for high-probability setups
         self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 10.0))  # ULTRA-SELECTIVE: Wider stops (10 bps) for high-probability setups
         self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 10))  # Longer time stop for high-probability setups
-        
+
         # Trailing stop parameters
         self.enable_trailing_stop = bool(trader_cfg.get("enable_trailing_stop", True))  # Enable trailing stops for winners
         self.trailing_stop_activation_bps = float(trader_cfg.get("trailing_stop_activation_bps", 4.0))  # Activate trailing after 4 bps profit
         self.trailing_stop_distance_bps = float(trader_cfg.get("trailing_stop_distance_bps", 2.0))  # Trail by 2 bps
-        
+
         # MFE/MAE tracking for analysis
         self._mfe_tracker: Dict[str, float] = {}  # position_id -> max favorable excursion
         self._mae_tracker: Dict[str, float] = {}  # position_id -> max adverse excursion
-        
+
         # Divergence tracking for confirmation
         self._divergence_start_brick: Dict[str, int] = {}  # divergence_type -> brick index when it started
         self.risk_per_trade_pct = float(trader_cfg.get("risk_per_trade_pct", 1.0))
@@ -528,7 +528,7 @@ class RenkoAOTrader:
             # Bearish divergence near upper BB (>0.8)
             if indicators.price_position_bb >= (1.0 - self.bb_enhancement_threshold):
                 bb_enhanced = True
-        
+
         if not bb_enhanced:
             LOG.debug(f"[renko_ao] BB position {indicators.price_position_bb:.2f} not in extreme zone")
             return None
@@ -545,7 +545,7 @@ class RenkoAOTrader:
         # Create signal
         side = "long" if indicators.divergence_type == "bullish" else "short"
         strength = indicators.divergence_strength
-        
+
         # ENHANCED LOGGING: Capture all entry conditions
         hour = datetime.fromtimestamp(time.time()).hour
         minute = datetime.fromtimestamp(time.time()).minute
@@ -623,13 +623,13 @@ class RenkoAOTrader:
             current_pnl_pct = (price - entry_price) / entry_price * 100
         else:
             current_pnl_pct = (entry_price - price) / entry_price * 100
-        
+
         # Track MFE (Maximum Favorable Excursion)
         if position_id not in self._mfe_tracker:
             self._mfe_tracker[position_id] = current_pnl_pct
         else:
             self._mfe_tracker[position_id] = max(self._mfe_tracker[position_id], current_pnl_pct)
-        
+
         # Track MAE (Maximum Adverse Excursion)
         if position_id not in self._mae_tracker:
             self._mae_tracker[position_id] = current_pnl_pct
@@ -721,7 +721,7 @@ class RenkoAOTrader:
                 # Get current AO for tracking
                 current_indicators = self._compute_indicators(signal.entry_price)
                 entry_ao = current_indicators.ao if current_indicators else 0.0
-                
+
                 self._current_position = {
                     "side": signal.side,
                     "entry_price": signal.entry_price,
@@ -772,11 +772,11 @@ class RenkoAOTrader:
 
                 self._open_orders[order.client_order_index] = order
                 self._order_timestamps[order.client_order_index] = time.time()  # Track order creation time
-                
+
                 # Get current AO for tracking
                 current_indicators = self._compute_indicators(signal.entry_price)
                 entry_ao = current_indicators.ao if current_indicators else 0.0
-                
+
                 self._current_position = {
                     "side": signal.side,
                     "entry_price": signal.entry_price,
@@ -906,7 +906,7 @@ class RenkoAOTrader:
                 mfe = self._mfe_tracker.get(position_id, pnl_pct)
                 mae = self._mae_tracker.get(position_id, pnl_pct)
                 time_in_trade = time.time() - pos["entry_time"]
-                
+
                 # Check if TP/SL was reached
                 reached_tp = False
                 reached_sl = False
@@ -916,7 +916,7 @@ class RenkoAOTrader:
                 else:
                     reached_tp = current_price <= pos["take_profit"]
                     reached_sl = current_price >= pos["stop_loss"]
-                
+
                 # ENHANCED LOGGING: Capture all exit conditions
                 hour = datetime.fromtimestamp(time.time()).hour
                 minute = datetime.fromtimestamp(time.time()).minute
@@ -925,14 +925,14 @@ class RenkoAOTrader:
                          f"MFE={mfe:.2f}%, MAE={mae:.2f}%, "
                          f"Reached_TP={reached_tp}, Reached_SL={reached_sl}, "
                          f"Time={hour:02d}:{minute:02d}")
-                
+
                 # Log live PnL
                 LOG.info("[renko_ao] LIVE PnL: %.2f%% (entry=%.2f, exit=%.2f, size=%.4f)",
                          pnl_pct, pos["entry_price"], current_price, pos["size"])
 
                 # Track exit reason for adaptive cooldown
                 self._recent_exit_reasons.append(reason)
-                
+
                 # Clean up MFE/MAE tracking
                 if position_id in self._mfe_tracker:
                     del self._mfe_tracker[position_id]

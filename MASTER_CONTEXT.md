@@ -576,12 +576,12 @@ python scripts/test_order.py --account-index 281474976639501 --api-key-index 16 
 1. **Ultra-Selective Entry Filters** (implemented)
    - RSI+BB: RSI >70 (long) or <30 (short), BB 0.2-0.3 or 0.7-0.8, Vol 3-8 bps, EMA divergence >5 bps
    - Renko+AO: Divergence >0.1, BB <0.2 or >0.8, AO >0.15 or <-0.15, ATR 3-8 bps
-   
+
 2. **Enhanced Logging** (implemented)
    - Comprehensive entry/exit condition logging
    - MFE/MAE tracking
    - Market context capture
-   
+
 3. **Exit Optimization** (implemented)
    - Wider stops (10 bps) for high-probability setups
    - Trailing stops for winners

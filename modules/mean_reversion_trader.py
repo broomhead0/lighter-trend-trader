@@ -129,12 +129,12 @@ class MeanReversionTrader:
         self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 6.0))  # Wider TP for high-probability setups
         self.stop_loss_bps = float(trader_cfg.get("stop_loss_bps", 10.0))  # ULTRA-SELECTIVE: Wider stops (10 bps) for high-probability setups
         self.max_hold_minutes = int(trader_cfg.get("max_hold_minutes", 10))  # Longer time stop for high-probability setups
-        
+
         # Trailing stop parameters
         self.enable_trailing_stop = bool(trader_cfg.get("enable_trailing_stop", True))  # Enable trailing stops for winners
         self.trailing_stop_activation_bps = float(trader_cfg.get("trailing_stop_activation_bps", 3.0))  # Activate trailing after 3 bps profit
         self.trailing_stop_distance_bps = float(trader_cfg.get("trailing_stop_distance_bps", 2.0))  # Trail by 2 bps
-        
+
         # MFE/MAE tracking for analysis
         self._mfe_tracker: Dict[str, float] = {}  # position_id -> max favorable excursion
         self._mae_tracker: Dict[str, float] = {}  # position_id -> max adverse excursion
@@ -159,6 +159,9 @@ class MeanReversionTrader:
         self._order_timestamps: Dict[int, float] = {}  # client_order_index -> creation timestamp
         self._order_timeout_seconds = 30.0  # Cancel orders that haven't filled after 30 seconds
         self._stop = asyncio.Event()
+        
+        # Recent momentum tracking (for entry filter)
+        self._recent_candle_directions: Deque[str] = deque(maxlen=5)  # Track last 5 candle directions
 
         # Adaptive trading: track recent performance
         self._recent_pnl: Deque[float] = deque(maxlen=10)  # Track last 10 trades
@@ -584,7 +587,7 @@ class MeanReversionTrader:
         ema_bullish = indicators.ema_fast > indicators.ema_slow
         ema_trend_strength = abs(indicators.ema_fast - indicators.ema_slow) / indicators.ema_slow * 10000
         trend_confirmed = ema_trend_strength >= self.trend_confirmation_bps  # EMA divergence >5 bps
-        
+
         # ULTRA-SELECTIVE: Recent momentum filter (last 3 candles should be in same direction)
         recent_momentum_bullish = len([d for d in list(self._recent_candle_directions)[-3:] if d == "up"]) >= 2
 
@@ -606,7 +609,7 @@ class MeanReversionTrader:
         price_in_optimal_zone = (bb_position >= 0.2 and bb_position <= 0.3) or (bb_position >= 0.7 and bb_position <= 0.8)
         ema_bearish = indicators.ema_fast < indicators.ema_slow
         trend_confirmed = ema_trend_strength >= self.trend_confirmation_bps  # EMA divergence >5 bps
-        
+
         # ULTRA-SELECTIVE: Recent momentum filter (last 3 candles should be in same direction)
         recent_momentum_bearish = len([d for d in list(self._recent_candle_directions)[-3:] if d == "down"]) >= 2
 
@@ -722,13 +725,13 @@ class MeanReversionTrader:
             current_pnl_pct = (price - entry_price) / entry_price * 100
         else:
             current_pnl_pct = (entry_price - price) / entry_price * 100
-        
+
         # Track MFE (Maximum Favorable Excursion)
         if position_id not in self._mfe_tracker:
             self._mfe_tracker[position_id] = current_pnl_pct
         else:
             self._mfe_tracker[position_id] = max(self._mfe_tracker[position_id], current_pnl_pct)
-        
+
         # Track MAE (Maximum Adverse Excursion)
         if position_id not in self._mae_tracker:
             self._mae_tracker[position_id] = current_pnl_pct
@@ -980,7 +983,7 @@ class MeanReversionTrader:
                 mfe = self._mfe_tracker.get(position_id, pnl_pct)
                 mae = self._mae_tracker.get(position_id, pnl_pct)
                 time_in_trade = time.time() - pos["entry_time"]
-                
+
                 # Check if TP/SL was reached
                 reached_tp = False
                 reached_sl = False
@@ -990,7 +993,7 @@ class MeanReversionTrader:
                 else:
                     reached_tp = current_price <= pos["take_profit"]
                     reached_sl = current_price >= pos["stop_loss"]
-                
+
                 # ENHANCED LOGGING: Capture all exit conditions
                 hour = datetime.fromtimestamp(time.time()).hour
                 minute = datetime.fromtimestamp(time.time()).minute
@@ -999,14 +1002,14 @@ class MeanReversionTrader:
                          f"MFE={mfe:.2f}%, MAE={mae:.2f}%, "
                          f"Reached_TP={reached_tp}, Reached_SL={reached_sl}, "
                          f"Time={hour:02d}:{minute:02d}")
-                
+
                 # Log live PnL
                 LOG.info("[mean_reversion] LIVE PnL: %.2f%% (entry=%.2f, exit=%.2f, size=%.4f)",
                          pnl_pct, pos["entry_price"], current_price, pos["size"])
 
                 # Track exit reason for adaptive cooldown
                 self._recent_exit_reasons.append(reason)
-                
+
                 # Clean up MFE/MAE tracking
                 if position_id in self._mfe_tracker:
                     del self._mfe_tracker[position_id]
