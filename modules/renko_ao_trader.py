@@ -705,13 +705,39 @@ class RenkoAOTrader:
                 LOG.info("[renko_ao] DRY RUN: would exit %s position", exit_side)
                 LOG.info("[renko_ao] simulated PnL: %.2f%%", pnl_pct)
             else:
-                order = await self.trading_client.create_limit_order(
-                    market=self.market,
-                    side=exit_side,
-                    price=current_price,
-                    size=pos["size"],
-                    post_only=False,
-                )
+                # Place market order to exit with retry logic for API errors
+                max_retries = 3
+                retry_delay = 1.0
+                order = None
+                for attempt in range(max_retries):
+                    try:
+                        order = await self.trading_client.create_limit_order(
+                            market=self.market,
+                            side=exit_side,
+                            price=current_price,
+                            size=pos["size"],
+                            post_only=False,
+                        )
+                        break  # Success
+                    except Exception as e:
+                        error_str = str(e)
+                        if "429" in error_str or "rate limit" in error_str.lower():
+                            # Rate limit: exponential backoff
+                            wait_time = retry_delay * (2 ** attempt)
+                            LOG.warning(f"[renko_ao] rate limit on exit (attempt {attempt+1}/{max_retries}), waiting {wait_time:.1f}s")
+                            await asyncio.sleep(wait_time)
+                        elif "21104" in error_str or "invalid nonce" in error_str.lower():
+                            # Invalid nonce: wait a bit and retry once
+                            if attempt < max_retries - 1:
+                                LOG.warning(f"[renko_ao] invalid nonce on exit (attempt {attempt+1}/{max_retries}), waiting {retry_delay:.1f}s")
+                                await asyncio.sleep(retry_delay)
+                            else:
+                                raise  # Last attempt, re-raise
+                        else:
+                            raise  # Other errors, re-raise immediately
+                
+                if order is None:
+                    raise RuntimeError(f"Failed to create exit order after {max_retries} attempts")
 
                 # Cancel entry order
                 if pos["order_index"] in self._open_orders:
