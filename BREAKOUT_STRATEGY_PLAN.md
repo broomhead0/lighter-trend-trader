@@ -1,9 +1,9 @@
 # Breakout + Momentum Strategy Plan
 
 ## Strategy Overview
-**Name:** Breakout Momentum Trader  
-**Type:** Breakout + Momentum  
-**Timeframe:** 15 minutes (configurable)  
+**Name:** Breakout Momentum Trader
+**Type:** Breakout + Momentum
+**Timeframe:** 15 minutes (configurable)
 **Target:** 2-5 trades/day, 55-65% win rate, 2:1-3:1 R:R
 
 ## Why This Works for SOL
@@ -82,7 +82,7 @@ def check_breakout_entry(price, indicators):
                 # 4. Check trend
                 if ema_20 > ema_50 and price > ema_20:
                     return "long"
-    
+
     # Similar for short
 ```
 
@@ -94,15 +94,15 @@ def check_breakout_exit(price, entry_price, indicators):
         trailing_stop = price - (0.5 * atr)  # For long
         if price <= trailing_stop:
             return "trailing_stop"
-    
+
     # Breakout failure
     if price < breakout_level:  # For long
         return "breakout_failure"
-    
+
     # Take profit
     if profit >= 2x_atr:
         return "take_profit"
-    
+
     # Stop loss
     if price <= stop_loss:
         return "stop_loss"
@@ -132,7 +132,7 @@ def check_breakout_exit(price, entry_price, indicators):
 
 ## Why This Complements Existing Strategies
 
-1. **Different Market Conditions**: 
+1. **Different Market Conditions**:
    - RSI+BB: Trending markets
    - Renko+AO: Reversal/divergence
    - Breakout: Explosive moves
@@ -153,10 +153,10 @@ def check_breakout_exit(price, entry_price, indicators):
 
 1. Should we use the same account or separate?
    - **Recommendation**: Same account (different strategies can coexist)
-   
+
 2. Should we use same timeframe (15m) or different?
    - **Recommendation**: Start with 15m, can optimize later
-   
+
 3. Should we combine with existing strategies or keep separate?
    - **Recommendation**: Keep separate initially, combine signals later if needed
 
