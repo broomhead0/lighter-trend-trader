@@ -138,9 +138,9 @@ class BreakoutTrader:
         self.max_hold_minutes = int(self.cfg.get("max_hold_minutes", 60))  # 60 minutes max hold
         self.no_movement_minutes = int(self.cfg.get("no_movement_minutes", 30))  # Exit if no progress after 30 min
 
-        # Position sizes
-        self.max_position_size = float(self.cfg.get("max_position_size", 0.1))  # Max SOL per trade
-        self.min_position_size = float(self.cfg.get("min_position_size", 0.1))  # Min SOL per trade
+        # Position sizes (small for testing)
+        self.max_position_size = float(self.cfg.get("max_position_size", 0.002))  # Max SOL per trade (small for testing)
+        self.min_position_size = float(self.cfg.get("min_position_size", 0.001))  # Min SOL per trade (small for testing)
 
         # Position tracking
         self._candles: Deque[Candle] = deque(maxlen=200)
@@ -188,7 +188,7 @@ class BreakoutTrader:
     async def run(self) -> None:
         """Main trading loop."""
         LOG.info("[breakout] starting trading loop")
-        
+
         # Initial candle fetch
         await self._fetch_candles()
 
@@ -640,7 +640,7 @@ class BreakoutTrader:
                     indicators.atr_expanding and
                     indicators.ema_20 > indicators.ema_50 and
                     price > indicators.ema_20):
-                    
+
                     # ENHANCED LOGGING
                     hour = datetime.fromtimestamp(time.time()).hour
                     minute = datetime.fromtimestamp(time.time()).minute
@@ -649,7 +649,7 @@ class BreakoutTrader:
                              f"RSI={indicators.rsi:.1f}, MACD={indicators.macd:.4f}>{indicators.macd_signal:.4f}, "
                              f"ATR_exp={indicators.atr_expanding}, EMA_20={indicators.ema_20:.2f}>{indicators.ema_50:.2f}, "
                              f"Vol={vol_bps:.1f}bps, Time={hour:02d}:{minute:02d}")
-                    
+
                     return self._create_signal("long", price, indicators, indicators.breakout_level_long)
 
         # Check for short breakout
@@ -661,7 +661,7 @@ class BreakoutTrader:
                     indicators.atr_expanding and
                     indicators.ema_20 < indicators.ema_50 and
                     price < indicators.ema_20):
-                    
+
                     # ENHANCED LOGGING
                     hour = datetime.fromtimestamp(time.time()).hour
                     minute = datetime.fromtimestamp(time.time()).minute
@@ -670,7 +670,7 @@ class BreakoutTrader:
                              f"RSI={indicators.rsi:.1f}, MACD={indicators.macd:.4f}<{indicators.macd_signal:.4f}, "
                              f"ATR_exp={indicators.atr_expanding}, EMA_20={indicators.ema_20:.2f}<{indicators.ema_50:.2f}, "
                              f"Vol={vol_bps:.1f}bps, Time={hour:02d}:{minute:02d}")
-                    
+
                     return self._create_signal("short", price, indicators, indicators.breakout_level_short)
 
         return None
