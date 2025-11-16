@@ -113,6 +113,43 @@
 - Divergences detected but often too weak (< 0.3 threshold)
 - Waiting for stronger divergence setups
 
+### 3. Breakout + Momentum Strategy (NEW)
+**File:** `modules/breakout_trader.py`
+**Type:** Breakout + Momentum (catches explosive moves)
+**Status:** Implemented, ready for testing
+**Account:** `281474976639273` (Account #2, separate from other strategies)
+**API Key Index:** `17`
+
+**Entry Conditions:**
+- **Long:** Price breaks above recent high (30-candle lookback) + RSI >60 + MACD bullish + ATR expanding + EMA 20 > EMA 50
+- **Short:** Price breaks below recent low (30-candle lookback) + RSI <40 + MACD bearish + ATR expanding + EMA 20 < EMA 50
+- Volatility 3-15 bps (sweet spot)
+- Candle must close above/below breakout level (confirmation)
+
+**Exit Conditions:**
+- Take profit: 2.5x ATR from entry
+- Trailing stop: After 1x ATR profit, trail by 0.5x ATR
+- Breakout failure: Price closes back below/above breakout level (immediate exit)
+- Stop loss: 1.5x ATR below/above breakout level
+- Time stop: 60 minutes max hold
+- No movement: Exit if no progress after 30 minutes
+
+**Key Parameters:**
+- `candle_interval_seconds: 900` (15 minutes - good for breakouts)
+- `breakout_lookback: 30` (30 candles to find recent high/low)
+- `rsi_bullish_threshold: 60.0` (RSI >60 for longs)
+- `rsi_bearish_threshold: 40.0` (RSI <40 for shorts)
+- `atr_min_bps: 3.0` (Minimum volatility)
+- `atr_max_bps: 15.0` (Maximum volatility)
+- `take_profit_atr_multiplier: 2.5` (2.5x ATR TP)
+- `stop_loss_atr_multiplier: 1.5` (1.5x ATR SL)
+
+**Expected Performance:**
+- Trade frequency: 2-5 trades/day
+- Win rate target: 55-65%
+- R:R target: 2:1-3:1
+- PnL target: +0.3-0.8% per day
+
 ---
 
 ## Configuration System
@@ -125,12 +162,15 @@
 2. **WS:** WebSocket URL and auth token
 3. **mean_reversion:** RSI + BB strategy settings
 4. **renko_ao:** Renko + AO strategy settings
+5. **breakout:** Breakout + Momentum strategy settings
 
 ### Important Environment Variables:
 - `MEAN_REVERSION_ENABLED=true`
 - `MEAN_REVERSION_DRY_RUN=false` (LIVE TRADING - tiny sizes)
 - `RENKO_AO_ENABLED=true`
 - `RENKO_AO_DRY_RUN=true` (still in dry-run)
+- `BREAKOUT_ENABLED=false` (set to true to enable)
+- `BREAKOUT_DRY_RUN=true` (start in dry-run)
 - `MEAN_REVERSION_CANDLE_INTERVAL_SECONDS=15`
 - `API_KEY_PRIVATE_KEY` (0x...)
 - `ACCOUNT_INDEX=281474976639501` (Account #2, separate from market maker bot at 366110)
