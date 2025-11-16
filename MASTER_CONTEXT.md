@@ -224,8 +224,10 @@ railway variables --set "ACCOUNT_INDEX=281474976639501" \
 
 **Current Setup:**
 - Market Maker Bot: Account `366110` (Account #1)
-- Trend Trading Bot: Account `281474976639501` (Account #2)
-- Both accounts are under the same wallet (`0xE7C753eD56B4258b1a700D9A1732D5bCff179A11`)
+- RSI+BB Strategy: Account `281474976639501` (Account #4), API Key Index `16`
+- Renko+AO Strategy: Account `281474976639377` (Account #3), API Key Index `17`
+- Breakout Strategy: Account `281474976639273` (Account #2), API Key Index `17`
+- All accounts are under the same wallet (`0xE7C753eD56B4258b1a700D9A1732D5bCff179A11`)
 
 **Safety Check:** `main.py` warns if account_index == 366110
 
