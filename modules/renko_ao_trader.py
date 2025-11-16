@@ -637,13 +637,40 @@ class RenkoAOTrader:
                 }
                 self._scaled_entries = []  # Reset scaled entries for new position
             else:
-                order = await self.trading_client.create_limit_order(
-                    market=self.market,
-                    side=order_side,
-                    price=order_price,
-                    size=signal.size,
-                    post_only=False,
-                )
+                # Place entry order with retry logic for API errors
+                max_retries = 3
+                retry_delay = 1.0
+                order = None
+                for attempt in range(max_retries):
+                    try:
+                        order = await self.trading_client.create_limit_order(
+                            market=self.market,
+                            side=order_side,
+                            price=order_price,
+                            size=signal.size,
+                            post_only=False,
+                        )
+                        break  # Success
+                    except Exception as e:
+                        error_str = str(e)
+                        if "429" in error_str or "rate limit" in error_str.lower():
+                            # Rate limit: exponential backoff
+                            wait_time = retry_delay * (2 ** attempt)
+                            LOG.warning(f"[renko_ao] rate limit on entry (attempt {attempt+1}/{max_retries}), waiting {wait_time:.1f}s")
+                            await asyncio.sleep(wait_time)
+                        elif "21104" in error_str or "invalid nonce" in error_str.lower():
+                            # Invalid nonce: wait a bit and retry once
+                            if attempt < max_retries - 1:
+                                LOG.warning(f"[renko_ao] invalid nonce on entry (attempt {attempt+1}/{max_retries}), waiting {retry_delay:.1f}s")
+                                await asyncio.sleep(retry_delay)
+                            else:
+                                raise  # Last attempt, re-raise
+                        else:
+                            raise  # Other errors, re-raise immediately
+                
+                if order is None:
+                    LOG.error(f"[renko_ao] failed to create entry order after {max_retries} attempts, skipping entry")
+                    return
 
                 self._open_orders[order.client_order_index] = order
                 self._order_timestamps[order.client_order_index] = time.time()  # Track order creation time
@@ -735,7 +762,7 @@ class RenkoAOTrader:
                                 raise  # Last attempt, re-raise
                         else:
                             raise  # Other errors, re-raise immediately
-                
+
                 if order is None:
                     raise RuntimeError(f"Failed to create exit order after {max_retries} attempts")
 
@@ -961,16 +988,16 @@ class RenkoAOTrader:
         if indicators is None or price is None:
             self._exit_cooldown_seconds = self._base_exit_cooldown_seconds
             return
-        
+
         # Calculate volatility in bps from ATR
         vol_bps = 0.0
         if self._current_renko_brick_size and price > 0:
             # ATR as percentage of price, converted to basis points
             vol_bps = (self._current_renko_brick_size / price) * 10000
-        
+
         # Start with base cooldown
         cooldown = self._base_exit_cooldown_seconds
-        
+
         # Increase cooldown in high volatility (choppy markets)
         # Use similar thresholds as RSI+BB (8 bps high, 2 bps low)
         if vol_bps > 8.0:
@@ -979,21 +1006,21 @@ class RenkoAOTrader:
         elif vol_bps < 2.0:
             cooldown *= 0.8  # 20% shorter in low vol (smoother markets)
             LOG.debug(f"[renko_ao] low volatility ({vol_bps:.1f} bps), reducing cooldown to {cooldown:.1f}s")
-        
+
         # Increase cooldown if recent exits were stop losses (prevent re-entry into losing trades)
         stop_loss_count = sum(1 for r in self._recent_exit_reasons if r == "stop_loss")
         if stop_loss_count >= 2:
             cooldown *= 1.3  # 30% longer after multiple stop losses
             LOG.debug(f"[renko_ao] {stop_loss_count} recent stop losses, extending cooldown to {cooldown:.1f}s")
-        
+
         # Increase cooldown during losing streak
         if self._losing_streak >= 2:
             cooldown *= 1.2  # 20% longer during losing streak
             LOG.debug(f"[renko_ao] losing streak {self._losing_streak}, extending cooldown to {cooldown:.1f}s")
-        
+
         # Cap cooldown at reasonable maximum (60 seconds)
         self._exit_cooldown_seconds = min(cooldown, 60.0)
-    
+
     def _update_telemetry(self, indicators: Optional[Indicators], price: Optional[float]) -> None:
         """Update telemetry metrics."""
         if not self.telemetry or indicators is None:

@@ -759,13 +759,40 @@ class MeanReversionTrader:
                     "order_index": 0,
                 }
             else:
-                order = await self.trading_client.create_limit_order(
-                    market=self.market,
-                    side=order_side,
-                    price=order_price,
-                    size=signal.size,
-                    post_only=False,  # Allow immediate execution
-                )
+                # Place entry order with retry logic for API errors
+                max_retries = 3
+                retry_delay = 1.0
+                order = None
+                for attempt in range(max_retries):
+                    try:
+                        order = await self.trading_client.create_limit_order(
+                            market=self.market,
+                            side=order_side,
+                            price=order_price,
+                            size=signal.size,
+                            post_only=False,  # Allow immediate execution
+                        )
+                        break  # Success
+                    except Exception as e:
+                        error_str = str(e)
+                        if "429" in error_str or "rate limit" in error_str.lower():
+                            # Rate limit: exponential backoff
+                            wait_time = retry_delay * (2 ** attempt)
+                            LOG.warning(f"[mean_reversion] rate limit on entry (attempt {attempt+1}/{max_retries}), waiting {wait_time:.1f}s")
+                            await asyncio.sleep(wait_time)
+                        elif "21104" in error_str or "invalid nonce" in error_str.lower():
+                            # Invalid nonce: wait a bit and retry once
+                            if attempt < max_retries - 1:
+                                LOG.warning(f"[mean_reversion] invalid nonce on entry (attempt {attempt+1}/{max_retries}), waiting {retry_delay:.1f}s")
+                                await asyncio.sleep(retry_delay)
+                            else:
+                                raise  # Last attempt, re-raise
+                        else:
+                            raise  # Other errors, re-raise immediately
+                
+                if order is None:
+                    LOG.error(f"[mean_reversion] failed to create entry order after {max_retries} attempts, skipping entry")
+                    return
 
                 self._open_orders[order.client_order_index] = order
                 self._order_timestamps[order.client_order_index] = time.time()  # Track order creation time
