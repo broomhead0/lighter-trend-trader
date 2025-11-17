@@ -82,17 +82,17 @@ CREATE TABLE trade_context (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     trade_id INTEGER NOT NULL,  -- Foreign key to trades table
     strategy TEXT NOT NULL,  -- "mean_reversion", "renko_ao", "breakout"
-    
+
     -- Common: Market Context
     volatility_bps REAL,  -- Market volatility at entry
     price_trend TEXT,  -- "up", "down", "sideways"
     volatility_trend TEXT,  -- "increasing", "decreasing", "stable"
     entry_hour INTEGER,  -- 0-23
     entry_day_of_week INTEGER,  -- 0-6 (Monday=0)
-    
+
     -- Common: Signal Quality
     signal_strength REAL,  -- 0.0-1.0
-    
+
     -- RSI+BB Specific (nullable)
     rsi_value REAL,
     bb_position REAL,  -- 0.0-1.0
@@ -101,14 +101,14 @@ CREATE TABLE trade_context (
     ema_trend_strength_bps REAL,
     volume_ratio REAL,
     recent_momentum TEXT,  -- "up", "down", "mixed"
-    
+
     -- Renko+AO Specific (nullable)
     divergence_type TEXT,  -- "bullish", "bearish"
     divergence_strength REAL,  -- 0.0-1.0
     ao_value REAL,
     brick_size REAL,
     bricks_since_divergence INTEGER,
-    
+
     -- Breakout Specific (nullable)
     breakout_type TEXT,  -- "long", "short"
     breakout_level REAL,
@@ -116,7 +116,7 @@ CREATE TABLE trade_context (
     macd_signal REAL,
     macd_histogram REAL,
     atr_expanding BOOLEAN,
-    
+
     -- Common: Exit Quality
     mfe_pct REAL,  -- Maximum favorable excursion %
     mae_pct REAL,  -- Maximum adverse excursion %
@@ -126,7 +126,7 @@ CREATE TABLE trade_context (
     reached_sl BOOLEAN,
     max_profit_pct REAL,
     max_drawdown_pct REAL,
-    
+
     created_at REAL NOT NULL,
     FOREIGN KEY (trade_id) REFERENCES trades(id)
 );
@@ -235,7 +235,7 @@ CREATE INDEX idx_trade_context_breakout_type ON trade_context(breakout_type);
 
 ### Find Best Performing Setup Types
 ```sql
-SELECT 
+SELECT
     strategy,
     divergence_type,
     AVG(pnl_pct) as avg_pnl,
@@ -250,7 +250,7 @@ ORDER BY avg_pnl DESC;
 
 ### Find Optimal Entry Hours
 ```sql
-SELECT 
+SELECT
     strategy,
     entry_hour,
     AVG(pnl_pct) as avg_pnl,
@@ -262,7 +262,7 @@ ORDER BY avg_pnl DESC;
 
 ### MFE/MAE Analysis (Are We Exiting Too Early?)
 ```sql
-SELECT 
+SELECT
     strategy,
     AVG(mfe_pct) as avg_mfe,
     AVG(pnl_pct) as avg_actual_pnl,

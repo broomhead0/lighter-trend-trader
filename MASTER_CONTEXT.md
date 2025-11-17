@@ -1,6 +1,6 @@
 # Master Context Document - Lighter Trend Trader
 
-**Last Updated:** 2025-11-17 (candle persistence, database system, full continuity across deploys)
+**Last Updated:** 2025-11-17 (unified analytics design, self-learning infrastructure planning, Renko optimization analysis)
 **Purpose:** This document contains all critical context needed to understand and work with this project when context is lost.
 
 ---
@@ -732,6 +732,66 @@ python scripts/test_order.py --account-index 281474976639501 --api-key-index 16 
 - **PnL Target**: >0.5% per day
 
 See `DEEP_DIVE_PLAN.md` for full details.
+
+---
+
+---
+
+## Self-Learning Infrastructure (2025-11-17)
+
+### Goal
+Build a system that **keeps learning until we achieve profitability** through automated data collection, performance analysis, and parameter optimization.
+
+### Current Infrastructure ✅
+1. **Deploy Continuity**: Positions, candles, bricks persist across deploys
+2. **Data Storage**: Trades, trade context, positions in database
+3. **Performance Tracking**: PnL tracker with query tools
+
+### Additional Infrastructure Needed
+
+**Phase 1: Essential (High Priority)**
+1. **Parameter History Tracking** - Track all parameter changes and link to performance
+2. **Performance Monitoring** - Automated checks, alerts on degradation, trend tracking
+
+**Phase 2: Helpful (Medium Priority)**
+3. **Automated Analysis** - Daily insights, setup performance, recommendations
+4. **Experiment Tracking** - A/B testing, compare configurations
+
+**Phase 3: Advanced (Future)**
+5. **Backtesting** - Test changes on historical data
+6. **Automated Optimization** - Self-tuning parameters
+
+### Key Principles
+- Keep it simple: Start with essentials, add complexity only if needed
+- Data-driven: All decisions based on data
+- Iterative: Small changes, measure results, iterate
+- Automated: Reduce manual work
+
+**See `SELF_LEARNING_INFRASTRUCTURE.md` for complete design.**
+
+---
+
+## Recent Analysis & Planning Documents
+
+### 1. Renko Strategy Optimization (`RENKO_OPTIMIZATION_ANALYSIS.md`)
+- Analysis of all parameter change recommendations
+- Pros/cons of each change
+- Data persistence requirements
+- Recommended implementation: All parameter changes (brick size 1.3, lookback 30, threshold 0.08, confirmation 4)
+
+### 2. Unified Analytics Design (`UNIFIED_ANALYTICS_DESIGN.md`)
+- Enhanced analytics for ALL strategies (RSI+BB, Renko+AO, Breakout)
+- Database schema for `trade_context` table
+- Strategy-specific entry data tracking
+- Common metrics: MFE/MAE, market context, exit quality
+- Enables cross-strategy comparison and pattern analysis
+
+### 3. Self-Learning Infrastructure (`SELF_LEARNING_INFRASTRUCTURE.md`)
+- Infrastructure needed for automated learning
+- Parameter versioning and history
+- Performance monitoring and alerts
+- Automated analysis and insights
+- Experiment tracking for A/B testing
 
 ---
 
