@@ -13,7 +13,7 @@ Railway may support persistent volumes, but the interface varies.
 **Alternative: Use /tmp directory**
 Railway's `/tmp` directory is often persistent across deployments. The bot will automatically try:
 1. `/data` (if volume exists)
-2. `/persist` (if volume exists)  
+2. `/persist` (if volume exists)
 3. `/tmp` (usually available and persistent)
 4. Local directory (fallback)
 

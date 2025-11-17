@@ -620,7 +620,10 @@ python scripts/test_order.py --account-index 281474976639501 --api-key-index 16 
   - Defaults: `min=0.1`, `max=0.1` SOL (meets Lighter minimum notional requirement ~$14)
   - Adaptive sizing: Reduces by 30% in low vol, 20% after losing streak
 - **Base Scale**: 1000 (1 SOL = 1000 base units) - configured in code, can override via `BASE_SCALE` env var
-- **PnL Tracking**: Database-backed (`pnl_trades.db`) for high-volume scalability
+- **PnL Tracking**: Database-backed (`/tmp/pnl_trades.db`) for high-volume scalability
+- **Persistent Storage**: Auto-detects path (`/data`, `/persist`, `/tmp`, or local)
+- **Backups**: Automatic hourly backups to `/tmp/backups/` (keeps last 10)
+- **Query Tool**: `scripts/query_pnl.py` for analysis (see Performance Tracking section)
 
 ---
 
