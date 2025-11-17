@@ -1008,18 +1008,25 @@ class BreakoutTrader:
 
             # Record in PnL tracker
             if hasattr(self, "pnl_tracker") and self.pnl_tracker:
-                await self.pnl_tracker.record_trade(
-                    strategy="breakout",
-                    side=pos["side"],
-                    entry_price=pos["entry_price"],
-                    exit_price=current_price,
-                    size=pos["size"],
-                    pnl_pct=pnl_pct,
-                    entry_time=pos["entry_time"],
-                    exit_time=time.time(),
-                    exit_reason=reason,
-                    market=self.market,
-                )
+                try:
+                    LOG.info(f"[breakout] Recording trade to PnL tracker: {pos['side']} {pnl_pct:.2f}%")
+                    await self.pnl_tracker.record_trade(
+                        strategy="breakout",
+                        side=pos["side"],
+                        entry_price=pos["entry_price"],
+                        exit_price=current_price,
+                        size=pos["size"],
+                        pnl_pct=pnl_pct,
+                        entry_time=pos["entry_time"],
+                        exit_time=time.time(),
+                        exit_reason=reason,
+                        market=self.market,
+                    )
+                    LOG.info(f"[breakout] ✅ Trade recorded successfully")
+                except Exception as e:
+                    LOG.exception(f"[breakout] ❌ Failed to record trade to PnL tracker: {e}")
+            else:
+                LOG.warning(f"[breakout] ⚠️  PnL tracker not available (hasattr={hasattr(self, 'pnl_tracker')}, tracker={getattr(self, 'pnl_tracker', None)})")
 
             # Clean up
             if position_id in self._mfe_tracker:

@@ -993,18 +993,25 @@ class RenkoAOTrader:
 
                 # Record in PnL tracker if available
                 if hasattr(self, "pnl_tracker") and self.pnl_tracker:
-                    await self.pnl_tracker.record_trade(
-                        strategy="renko_ao",
-                        side=pos["side"],
-                        entry_price=pos["entry_price"],
-                        exit_price=current_price,
-                        size=pos["size"],
-                        pnl_pct=pnl_pct,
-                        entry_time=pos["entry_time"],
-                        exit_time=time.time(),
-                        exit_reason=reason,
-                        market=self.market,
-                    )
+                    try:
+                        LOG.info(f"[renko_ao] Recording trade to PnL tracker: {pos['side']} {pnl_pct:.2f}%")
+                        await self.pnl_tracker.record_trade(
+                            strategy="renko_ao",
+                            side=pos["side"],
+                            entry_price=pos["entry_price"],
+                            exit_price=current_price,
+                            size=pos["size"],
+                            pnl_pct=pnl_pct,
+                            entry_time=pos["entry_time"],
+                            exit_time=time.time(),
+                            exit_reason=reason,
+                            market=self.market,
+                        )
+                        LOG.info(f"[renko_ao] ✅ Trade recorded successfully")
+                    except Exception as e:
+                        LOG.exception(f"[renko_ao] ❌ Failed to record trade to PnL tracker: {e}")
+                else:
+                    LOG.warning(f"[renko_ao] ⚠️  PnL tracker not available (hasattr={hasattr(self, 'pnl_tracker')}, tracker={getattr(self, 'pnl_tracker', None)})")
 
             # Delete position from database
             if self.position_tracker:
