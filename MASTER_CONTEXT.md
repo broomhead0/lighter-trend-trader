@@ -270,6 +270,13 @@ railway variables --set "ACCOUNT_INDEX=281474976639501" \
 - Breakout Strategy: Account `281474976639273` (Account #2), API Key Index `17`
 - All accounts are under the same wallet (`0xE7C753eD56B4258b1a700D9A1732D5bCff179A11`)
 
+**Persistent Storage:**
+- **Database**: `/tmp/pnl_trades.db` (persists across deployments)
+- **Backups**: `/tmp/backups/` (hourly, keeps last 10)
+- **Environment Variable**: `PNL_DB_PATH=/tmp/pnl_trades.db` (already set in Railway)
+- **Backup Config**: Enabled by default (`pnl_backup.enabled: true`)
+- **Query Tool**: `scripts/query_pnl.py` for analysis (see Performance Tracking section)
+
 **Safety Check:** `main.py` warns if account_index == 366110
 
 ### 2. Candle Building
