@@ -743,17 +743,19 @@ See `DEEP_DIVE_PLAN.md` for full details.
 
 ---
 
-## Self-Learning Infrastructure (2025-11-17)
+## Self-Learning Infrastructure (2025-11-17) - **FUTURE TODO**
+
+### Status: 📋 **Planned, Not Yet Implemented**
 
 ### Goal
 Build a system that **keeps learning until we achieve profitability** through automated data collection, performance analysis, and parameter optimization.
 
-### Current Infrastructure ✅
+### Current Infrastructure ✅ (Already Built)
 1. **Deploy Continuity**: Positions, candles, bricks persist across deploys
 2. **Data Storage**: Trades, trade context, positions in database
 3. **Performance Tracking**: PnL tracker with query tools
 
-### Additional Infrastructure Needed
+### Planned Infrastructure (To Be Implemented)
 
 **Phase 1: Essential (High Priority)**
 1. **Parameter History Tracking** - Track all parameter changes and link to performance
@@ -772,6 +774,12 @@ Build a system that **keeps learning until we achieve profitability** through au
 - Data-driven: All decisions based on data
 - Iterative: Small changes, measure results, iterate
 - Automated: Reduce manual work
+
+### Scheduling Strategy
+- **No cron jobs needed initially** - Can be built into main trading loop
+- Performance monitoring runs automatically every 6 hours
+- Parameter tracking happens automatically on deploy
+- See `SCHEDULING_STRATEGY.md` for details
 
 **See `SELF_LEARNING_INFRASTRUCTURE.md` for complete design.**
 
