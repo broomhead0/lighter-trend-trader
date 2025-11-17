@@ -696,7 +696,7 @@ class BreakoutTrader:
         """Check if ATR is expanding (current > average of recent ATRs)."""
         if len(candles) < self.atr_period * 2:
             return False
-        
+
         # Handle None ATR
         if current_atr is None or current_atr <= 0:
             return False
