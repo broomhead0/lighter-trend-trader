@@ -168,14 +168,15 @@
 - `MEAN_REVERSION_ENABLED=true`
 - `MEAN_REVERSION_DRY_RUN=false` (LIVE TRADING - tiny sizes)
 - `RENKO_AO_ENABLED=true`
-- `RENKO_AO_DRY_RUN=true` (still in dry-run)
-- `BREAKOUT_ENABLED=false` (set to true to enable)
-- `BREAKOUT_DRY_RUN=true` (start in dry-run)
+- `RENKO_AO_DRY_RUN=false` (live trading)
+- `BREAKOUT_ENABLED=true` (enabled)
+- `BREAKOUT_DRY_RUN=false` (live trading with small sizes)
 - `MEAN_REVERSION_CANDLE_INTERVAL_SECONDS=15`
 - `API_KEY_PRIVATE_KEY` (0x...)
-- `ACCOUNT_INDEX=281474976639501` (Account #2, separate from market maker bot at 366110)
+- `ACCOUNT_INDEX=281474976639501` (Account #4, separate from market maker bot at 366110)
 - `API_KEY_INDEX=16`
 - `API_BASE_URL=https://mainnet.zklighter.elliot.ai`
+- `PNL_DB_PATH=/tmp/pnl_trades.db` (Persistent trade database)
 
 ---
 
@@ -457,14 +458,24 @@ trader = StrategyTrader(
 
 **For 100k+ trades, we use a database-backed PnL tracker:**
 - **Storage**: SQLite with WAL mode (can handle millions of trades)
-- **Location**: `pnl_trades.db` (or set `PNL_DB_PATH` env var)
+- **Location**: Auto-detects best path (`/data`, `/persist`, `/tmp`, or local)
+- **Railway**: Uses `/tmp/pnl_trades.db` (set via `PNL_DB_PATH` env var)
 - **Performance**: <10ms queries, <1ms writes
 - **Features**: Per-strategy tracking, time-based filtering, fast aggregation
+- **Persistence**: Database survives deployments (stored on persistent path)
 
 **Automatic Recording:**
 - Every closed position is automatically recorded to the database
-- Tracks: strategy, side, entry/exit prices, PnL %, size, timestamps, exit reason
+- Tracks: strategy, side, entry/exit prices, PnL %, size, timestamps, exit reason, market
 - No performance impact (async, non-blocking)
+- All trades persisted for historical analysis
+
+**Persistent Storage:**
+- **Database Path**: `/tmp/pnl_trades.db` (Railway) - persists across deployments
+- **Backups**: Automatic hourly backups to `/tmp/backups/` (keeps last 10)
+- **Backup Config**: Enabled by default in `config.yaml` (`pnl_backup.enabled: true`)
+- **Backup Interval**: 3600 seconds (1 hour)
+- **Backup Methods Supported**: Local, S3, Webhook (see `PERSISTENT_STORAGE.md`)
 
 **Query PnL Statistics:**
 ```bash
@@ -474,20 +485,44 @@ python scripts/query_pnl.py
 # By strategy
 python scripts/query_pnl.py --strategy mean_reversion
 python scripts/query_pnl.py --strategy renko_ao
+python scripts/query_pnl.py --strategy breakout
 
-# Last 24 hours
-python scripts/query_pnl.py --since-hours 24
+# Time-based filtering
+python scripts/query_pnl.py --since 24h  # Last 24 hours
+python scripts/query_pnl.py --since 7d   # Last 7 days
+python scripts/query_pnl.py --since 30d  # Last 30 days
 
 # Recent trades
 python scripts/query_pnl.py --recent 50
+
+# Export to CSV/JSON
+python scripts/query_pnl.py --export csv --output trades.csv
+python scripts/query_pnl.py --export json --output trades.json
 ```
 
 **Returns:**
 - Total trades, wins, losses, win rate
 - Total PnL (%), Total PnL (USD)
 - Average PnL, average win, average loss
+- R:R ratio (risk/reward)
 - Best/worst trades
-- Recent trade history
+- Breakdown by strategy and exit reason
+- Recent trade history with timestamps
+
+**Database Schema:**
+- `id`: Auto-increment primary key
+- `strategy`: mean_reversion, renko_ao, or breakout
+- `side`: long or short
+- `entry_price`, `exit_price`: Prices
+- `size`: Position size in SOL
+- `pnl_pct`: Profit/loss percentage
+- `pnl_usd`: Approximate USD value
+- `entry_time`, `exit_time`: Unix timestamps
+- `exit_reason`: take_profit, stop_loss, time_stop, etc.
+- `market`: market:2 (SOL)
+- `created_at`: Record creation timestamp
+
+**Indexes:** Fast queries on strategy, exit_time, market, pnl_pct
 
 ### Metrics to Monitor
 - **RSI + BB:** Trades, win rate, PnL, RSI levels, BB position
