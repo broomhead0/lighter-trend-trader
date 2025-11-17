@@ -98,6 +98,7 @@ class MeanReversionTrader:
         self.trading_client = trading_client
         self.alerts = alert_manager
         self.telemetry = telemetry
+        self.position_tracker = None  # Will be set by main.py
 
         trader_cfg = (self.cfg.get("mean_reversion") or {}) if isinstance(self.cfg.get("mean_reversion"), dict) else {}
 
@@ -273,30 +274,26 @@ class MeanReversionTrader:
                 await asyncio.sleep(10.0)
 
     async def _recover_existing_position(self) -> None:
-        """Check for existing position on exchange and recover state."""
-        if self.dry_run or not self.trading_client:
+        """Check for existing position in database and recover state."""
+        if self.dry_run or not self.position_tracker:
             return
-
+        
         try:
-            # Get current price
-            current_price = self._get_current_price()
-            if not current_price:
-                LOG.warning("[mean_reversion] Cannot recover position: no current price available")
-                return
-
-            # Try to get position from signer client if available
-            try:
-                if hasattr(self.trading_client, "_signer") and self.trading_client._signer:
-                    await self.trading_client.ensure_ready()
-                    LOG.info("[mean_reversion] Checking for existing positions on exchange...")
-                    LOG.warning(
-                        "[mean_reversion] ⚠️  Position recovery: If you have an open position, "
-                        "the bot will not manage it until it's manually closed or the bot takes a new trade. "
-                        "Consider manually closing profitable positions or wait for exit conditions to trigger."
-                    )
-            except Exception as e:
-                LOG.debug(f"[mean_reversion] Could not check exchange positions: {e}")
-
+            # Load position from database
+            position = await self.position_tracker.load_position("mean_reversion", self.market)
+            if position:
+                self._current_position = position
+                LOG.warning(
+                    f"[mean_reversion] ✅ RECOVERED POSITION FROM DATABASE: "
+                    f"{position['side']} {position['size']:.4f} SOL @ {position['entry_price']:.2f} "
+                    f"(entry_time: {position['entry_time']:.0f}, age: {(time.time() - position['entry_time'])/60:.1f} min)"
+                )
+                LOG.warning(
+                    f"[mean_reversion] Position will be managed with current exit logic. "
+                    f"TP: {position['take_profit']:.2f}, SL: {position['stop_loss']:.2f}"
+                )
+            else:
+                LOG.info("[mean_reversion] No saved position found in database")
         except Exception as e:
             LOG.exception(f"[mean_reversion] error recovering position: {e}")
 
@@ -869,6 +866,9 @@ class MeanReversionTrader:
                     "entry_time": time.time(),
                     "order_index": 0,
                 }
+                # Save position to database
+                if self.position_tracker:
+                    await self.position_tracker.save_position("mean_reversion", self._current_position, self.market)
             else:
                 # Place entry order with retry logic for API errors
                 max_retries = 3
@@ -916,6 +916,9 @@ class MeanReversionTrader:
                     "entry_time": time.time(),
                     "order_index": order.client_order_index,
                 }
+                # Save position to database
+                if self.position_tracker:
+                    await self.position_tracker.save_position("mean_reversion", self._current_position, self.market)
 
                 if self.telemetry:
                     self.telemetry.set_gauge("mean_reversion_position_side", 1.0 if signal.side == "long" else -1.0)
@@ -938,6 +941,9 @@ class MeanReversionTrader:
         )
 
         if not self.trading_client and not self.dry_run:
+            # Delete position from database
+            if self.position_tracker:
+                await self.position_tracker.delete_position("mean_reversion", self.market)
             self._current_position = None
             return
 
@@ -1073,6 +1079,9 @@ class MeanReversionTrader:
                         market=self.market,
                     )
 
+            # Delete position from database
+            if self.position_tracker:
+                await self.position_tracker.delete_position("mean_reversion", self.market)
             self._current_position = None
             self._last_exit_time = time.time()  # Record exit time for cooldown
 

@@ -105,6 +105,7 @@ class BreakoutTrader:
         self.trading_client = trading_client
         self.alerts = alert_manager
         self.telemetry = telemetry
+        self.position_tracker = None  # Will be set by main.py
 
         # Market config
         self.market = str(self.cfg.get("market", "market:2"))
@@ -262,30 +263,26 @@ class BreakoutTrader:
                 await asyncio.sleep(10.0)
 
     async def _recover_existing_position(self) -> None:
-        """Check for existing position on exchange and recover state."""
-        if self.dry_run or not self.trading_client:
+        """Check for existing position in database and recover state."""
+        if self.dry_run or not self.position_tracker:
             return
-
+        
         try:
-            # Get current price
-            current_price = self._get_current_price()
-            if not current_price:
-                LOG.warning("[breakout] Cannot recover position: no current price available")
-                return
-
-            # Try to get position from signer client if available
-            try:
-                if hasattr(self.trading_client, "_signer") and self.trading_client._signer:
-                    await self.trading_client.ensure_ready()
-                    LOG.info("[breakout] Checking for existing positions on exchange...")
-                    LOG.warning(
-                        "[breakout] ⚠️  Position recovery: If you have an open position, "
-                        "the bot will not manage it until it's manually closed or the bot takes a new trade. "
-                        "Consider manually closing profitable positions or wait for exit conditions to trigger."
-                    )
-            except Exception as e:
-                LOG.debug(f"[breakout] Could not check exchange positions: {e}")
-
+            # Load position from database
+            position = await self.position_tracker.load_position("breakout", self.market)
+            if position:
+                self._current_position = position
+                LOG.warning(
+                    f"[breakout] ✅ RECOVERED POSITION FROM DATABASE: "
+                    f"{position['side']} {position['size']:.4f} SOL @ {position['entry_price']:.2f} "
+                    f"(entry_time: {position['entry_time']:.0f}, age: {(time.time() - position['entry_time'])/60:.1f} min)"
+                )
+                LOG.warning(
+                    f"[breakout] Position will be managed with current exit logic. "
+                    f"TP: {position['take_profit']:.2f}, SL: {position['stop_loss']:.2f}"
+                )
+            else:
+                LOG.info("[breakout] No saved position found in database")
         except Exception as e:
             LOG.exception(f"[breakout] error recovering position: {e}")
 
@@ -862,6 +859,9 @@ class BreakoutTrader:
                     "breakout_level": signal.breakout_level,
                     "order_index": 0,
                 }
+                # Save position to database
+                if self.position_tracker:
+                    await self.position_tracker.save_position("breakout", self._current_position, self.market)
             else:
                 max_retries = 3
                 retry_delay = 1.0
@@ -904,6 +904,9 @@ class BreakoutTrader:
                     "breakout_level": signal.breakout_level,
                     "order_index": order.client_order_index,
                 }
+                # Save position to database
+                if self.position_tracker:
+                    await self.position_tracker.save_position("breakout", self._current_position, self.market)
 
                 if self.telemetry:
                     self.telemetry.set_gauge("breakout_position_side", 1.0 if signal.side == "long" else -1.0)
@@ -921,6 +924,9 @@ class BreakoutTrader:
         LOG.info(f"[breakout] exiting position: side={pos['side']} entry={pos['entry_price']:.2f} reason={reason}")
 
         if not self.trading_client and not self.dry_run:
+            # Delete position from database
+            if self.position_tracker:
+                await self.position_tracker.delete_position("breakout", self.market)
             self._current_position = None
             return
 
@@ -1022,6 +1028,9 @@ class BreakoutTrader:
                 del self._mae_tracker[position_id]
 
             self._last_exit_time = time.time()
+            # Delete position from database
+            if self.position_tracker:
+                await self.position_tracker.delete_position("breakout", self.market)
             self._current_position = None
 
             if self.telemetry:

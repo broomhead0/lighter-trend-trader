@@ -1127,6 +1127,11 @@ class RenkoAOTrader:
                 f"[renko_ao] position updated: avg_entry={new_avg_entry:.2f}, "
                 f"total_size={total_size:.4f}, stop_loss={pos['stop_loss']:.2f}"
             )
+            
+            # Update position in database (with scaled entries)
+            pos["scaled_entries"] = self._scaled_entries
+            if self.position_tracker:
+                await self.position_tracker.save_position("renko_ao", pos, self.market)
 
         except Exception as e:
             LOG.exception(f"[renko_ao] error scaling into position: {e}")
