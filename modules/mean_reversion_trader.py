@@ -196,6 +196,9 @@ class MeanReversionTrader:
     async def run(self):
         """Main trading loop."""
         LOG.info(f"[mean_reversion] starting trading loop (candle interval: {self.candle_interval_seconds}s)")
+        
+        # Check for existing position on startup (recover from deploy)
+        await self._recover_existing_position()
 
         # Initial candle fetch
         await self._fetch_candles()

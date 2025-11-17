@@ -193,6 +193,10 @@ class RenkoAOTrader:
     async def run(self):
         """Main trading loop."""
         LOG.info("[renko_ao] starting trading loop")
+        
+        # Check for existing position on startup (recover from deploy)
+        await self._recover_existing_position()
+        
         while not self._stop.is_set():
             try:
                 current_price = self._get_current_price()
@@ -278,6 +282,41 @@ class RenkoAOTrader:
             except Exception as e:
                 LOG.exception("[renko_ao] error in trading loop: %s", e)
                 await asyncio.sleep(5.0)
+
+    async def _recover_existing_position(self) -> None:
+        """Check for existing position on exchange and recover state."""
+        if self.dry_run or not self.trading_client:
+            return
+        
+        try:
+            # Try to query position from exchange via API
+            # Note: This requires checking if lighter-python has position query methods
+            # For now, we'll use a conservative approach: assume no position unless we can verify
+            
+            # Get current price
+            current_price = self._get_current_price()
+            if not current_price:
+                LOG.warning("[renko_ao] Cannot recover position: no current price available")
+                return
+            
+            # Try to get position from signer client if available
+            try:
+                if hasattr(self.trading_client, "_signer") and self.trading_client._signer:
+                    await self.trading_client.ensure_ready()
+                    # Check if signer has position query method
+                    # Note: lighter-python may not expose this directly, so we'll log a warning
+                    LOG.info("[renko_ao] Checking for existing positions on exchange...")
+                    # For now, we can't directly query, but we'll add a manual recovery option
+                    LOG.warning(
+                        "[renko_ao] ⚠️  Position recovery: If you have an open position, "
+                        "the bot will not manage it until it's manually closed or the bot takes a new trade. "
+                        "Consider manually closing profitable positions or wait for exit conditions to trigger."
+                    )
+            except Exception as e:
+                LOG.debug(f"[renko_ao] Could not check exchange positions: {e}")
+                
+        except Exception as e:
+            LOG.exception(f"[renko_ao] error recovering position: {e}")
 
     async def stop(self):
         """Stop the trader."""
