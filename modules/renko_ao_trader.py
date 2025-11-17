@@ -107,8 +107,8 @@ class RenkoAOTrader:
 
         # Renko parameters (ATR-based)
         self.renko_atr_period = int(trader_cfg.get("renko_atr_period", 14))  # ATR period for brick size
-        self.renko_atr_multiplier = float(trader_cfg.get("renko_atr_multiplier", 1.0))  # ATR multiplier for brick size
-        self.renko_lookback = int(trader_cfg.get("renko_lookback", 20))  # Look back 20 bricks for divergence
+        self.renko_atr_multiplier = float(trader_cfg.get("renko_atr_multiplier", 1.3))  # ATR multiplier for brick size (1.3 = 30% larger)
+        self.renko_lookback = int(trader_cfg.get("renko_lookback", 30))  # Look back 30 bricks for divergence (increased for better patterns)
         self._current_renko_brick_size: Optional[float] = None  # Dynamic brick size based on ATR
 
         # Awesome Oscillator parameters
@@ -431,8 +431,28 @@ class RenkoAOTrader:
             self._current_brick.low = min(self._current_brick.low, price)
 
             # Add to history
-            self._renko_bricks.append(self._current_brick)
+            completed_brick = self._current_brick  # Save reference before creating new brick
+            self._renko_bricks.append(completed_brick)
             self._price_history.append(new_close)
+            
+            # Save completed brick to database
+            if self.renko_tracker:
+                try:
+                    await self.renko_tracker.save_bricks(
+                        "renko_ao",
+                        self.market,
+                        [{
+                            "open_time": completed_brick.open_time,
+                            "open": completed_brick.open,
+                            "close": completed_brick.close,
+                            "direction": completed_brick.direction,
+                            "high": completed_brick.high,
+                            "low": completed_brick.low,
+                        }]
+                    )
+                    LOG.debug(f"[renko_ao] ✅ Saved brick to database: {completed_brick.open_time}")
+                except Exception as e:
+                    LOG.exception(f"[renko_ao] ❌ Failed to save brick to database: {e}")
 
             # Start new brick
             self._current_brick = RenkoBrick(
