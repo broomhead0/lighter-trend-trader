@@ -61,7 +61,7 @@ PERFORMANCE_CHECK_INTERVAL = 6 * 3600  # 6 hours
 
 while running:
     # ... trading logic ...
-    
+
     # Performance monitoring (every 6 hours)
     if time.time() - last_performance_check > PERFORMANCE_CHECK_INTERVAL:
         await check_performance()
@@ -138,7 +138,7 @@ async def monitor_performance():
 last_check = 0
 while True:
     # ... existing trading logic ...
-    
+
     # Performance check every 6 hours
     if time.time() - last_check > 6 * 3600:
         await monitor_performance()

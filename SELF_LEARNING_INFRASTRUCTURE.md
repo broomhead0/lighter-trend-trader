@@ -54,7 +54,7 @@ CREATE TABLE parameter_history (
 );
 ```
 
-**Why**: 
+**Why**:
 - Know what parameter values worked best
 - Can revert if performance drops
 - Track optimization journey

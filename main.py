@@ -19,6 +19,7 @@ from modules.ws_price_feed import WebSocketPriceFeed
 from modules.pnl_tracker import PnLTracker
 from modules.position_tracker import PositionTracker
 from modules.candle_tracker import CandleTracker
+from modules.renko_tracker import RenkoTracker
 
 LOG = logging.getLogger("main")
 
@@ -179,6 +180,10 @@ async def main():
     # Initialize candle tracker (uses same database)
     candle_tracker = CandleTracker(db_path=pnl_db_path)
     LOG.info(f"Candle tracker initialized: {pnl_db_path} (persists candles across deploys)")
+    
+    # Initialize Renko tracker (uses same database)
+    renko_tracker = RenkoTracker(db_path=pnl_db_path)
+    LOG.info(f"Renko tracker initialized: {pnl_db_path} (persists bricks and price history across deploys)")
 
     # Initialize backup if configured
     backup_config = cfg.get("pnl_backup") or {}
@@ -293,6 +298,7 @@ async def main():
             )
             renko_ao_trader.pnl_tracker = pnl_tracker  # Attach PnL tracker
             renko_ao_trader.position_tracker = position_tracker  # Attach position tracker
+            renko_ao_trader.renko_tracker = renko_tracker  # Attach Renko tracker
             if renko_ao_api_cfg:
                 LOG.info(f"Renko + AO trader initialized with dedicated account {renko_ao_api_cfg.get('account_index')}")
             else:

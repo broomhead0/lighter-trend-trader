@@ -97,6 +97,7 @@ class RenkoAOTrader:
         self.alerts = alert_manager
         self.telemetry = telemetry
         self.position_tracker = None  # Will be set by main.py
+        self.renko_tracker = None  # Will be set by main.py
 
         trader_cfg = (self.cfg.get("renko_ao") or {}) if isinstance(self.cfg.get("renko_ao"), dict) else {}
 
@@ -120,9 +121,9 @@ class RenkoAOTrader:
 
         # Entry filters (ULTRA-SELECTIVE - quality over quantity)
         self.bb_enhancement_threshold = float(trader_cfg.get("bb_enhancement_threshold", 0.1))  # ULTRA-SELECTIVE: BB <0.2 or >0.8 - extreme positions only
-        self.min_divergence_strength = float(trader_cfg.get("min_divergence_strength", 0.1))  # ULTRA-SELECTIVE: Divergence >0.1 - strong divergence only
+        self.min_divergence_strength = float(trader_cfg.get("min_divergence_strength", 0.08))  # Balanced selectivity: Divergence >0.08
         self.min_ao_strength = float(trader_cfg.get("min_ao_strength", 0.15))  # ULTRA-SELECTIVE: AO >0.15 or <-0.15 - strong momentum
-        self.min_bricks_since_divergence = int(trader_cfg.get("min_bricks_since_divergence", 3))  # ULTRA-SELECTIVE: At least 3 bricks since divergence started
+        self.min_bricks_since_divergence = int(trader_cfg.get("min_bricks_since_divergence", 4))  # Balanced: At least 4 bricks since divergence started
         self.optimal_atr_min_bps = float(trader_cfg.get("optimal_atr_min_bps", 3.0))  # ULTRA-SELECTIVE: ATR 3-8 bps
         self.optimal_atr_max_bps = float(trader_cfg.get("optimal_atr_max_bps", 8.0))
 
@@ -197,6 +198,9 @@ class RenkoAOTrader:
 
         # Check for existing position on startup (recover from deploy)
         await self._recover_existing_position()
+        
+        # Load saved bricks and price history from database (recover from deploy)
+        await self._recover_renko_state()
 
         while not self._stop.is_set():
             try:
@@ -207,6 +211,9 @@ class RenkoAOTrader:
 
                 # Update price history for ATR calculation
                 self._price_history.append(current_price)
+                # Save price history periodically (every 100 prices to avoid too many writes)
+                if self.renko_tracker and len(self._price_history) % 100 == 0:
+                    await self.renko_tracker.save_price_history("renko_ao", self.market, list(self._price_history))
 
                 # Calculate ATR and update Renko brick size
                 atr = self._calculate_atr()
@@ -313,6 +320,47 @@ class RenkoAOTrader:
                 LOG.info("[renko_ao] No saved position found in database")
         except Exception as e:
             LOG.exception(f"[renko_ao] error recovering position: {e}")
+
+    async def _recover_renko_state(self) -> None:
+        """Load saved Renko bricks and price history from database on startup."""
+        if not self.renko_tracker:
+            return
+        
+        try:
+            # Load bricks
+            saved_bricks = await self.renko_tracker.load_bricks("renko_ao", self.market, limit=200)
+            if saved_bricks:
+                # Convert to RenkoBrick objects
+                for b in saved_bricks:
+                    brick = RenkoBrick(
+                        open_time=b["open_time"],
+                        open=b["open"],
+                        close=b["close"],
+                        direction=b["direction"],
+                        high=b["high"],
+                        low=b["low"],
+                    )
+                    self._renko_bricks.append(brick)
+                
+                LOG.warning(
+                    f"[renko_ao] ✅ RECOVERED {len(saved_bricks)} BRICKS FROM DATABASE "
+                    f"(oldest: {saved_bricks[0]['open_time']}, newest: {saved_bricks[-1]['open_time']})"
+                )
+            else:
+                LOG.info("[renko_ao] No saved bricks found in database, starting fresh")
+            
+            # Load price history
+            saved_prices = await self.renko_tracker.load_price_history("renko_ao", self.market, limit=1000)
+            if saved_prices:
+                self._price_history.clear()
+                self._price_history.extend(saved_prices)
+                LOG.warning(
+                    f"[renko_ao] ✅ RECOVERED {len(saved_prices)} PRICE POINTS FROM DATABASE"
+                )
+            else:
+                LOG.info("[renko_ao] No saved price history found in database, starting fresh")
+        except Exception as e:
+            LOG.exception(f"[renko_ao] error recovering Renko state: {e}")
 
     async def stop(self):
         """Stop the trader."""
