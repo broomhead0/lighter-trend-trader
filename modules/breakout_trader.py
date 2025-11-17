@@ -194,7 +194,7 @@ class BreakoutTrader:
 
         # Check for existing position on startup (recover from deploy)
         await self._recover_existing_position()
-        
+
         # Load saved candles from database (recover from deploy)
         await self._recover_candles()
 
@@ -295,7 +295,7 @@ class BreakoutTrader:
         """Load saved candles from database on startup."""
         if not self.candle_tracker:
             return
-        
+
         try:
             saved_candles = await self.candle_tracker.load_candles("breakout", self.market, limit=200)
             if saved_candles:
@@ -310,7 +310,7 @@ class BreakoutTrader:
                         volume=c["volume"],
                     )
                     self._candles.append(candle)
-                
+
                 LOG.warning(
                     f"[breakout] ✅ RECOVERED {len(saved_candles)} CANDLES FROM DATABASE "
                     f"(oldest: {saved_candles[0]['open_time']}, newest: {saved_candles[-1]['open_time']})"
@@ -437,21 +437,25 @@ class BreakoutTrader:
             self._candles.append(new_candle)
             if len(self._candles) > 200:
                 self._candles = self._candles[-200:]
-            LOG.debug(f"[breakout] created new candle at {current_candle_time}, price={price:.2f}")
+            LOG.info(f"[breakout] created new candle at {current_candle_time}, price={price:.2f}, total candles: {len(self._candles)}")
             # Save new candle to database
             if self.candle_tracker:
-                await self.candle_tracker.save_candles(
-                    "breakout",
-                    self.market,
-                    [{
-                        "open_time": new_candle.open_time,
-                        "open": new_candle.open,
-                        "high": new_candle.high,
-                        "low": new_candle.low,
-                        "close": new_candle.close,
-                        "volume": new_candle.volume,
-                    }]
-                )
+                try:
+                    await self.candle_tracker.save_candles(
+                        "breakout",
+                        self.market,
+                        [{
+                            "open_time": new_candle.open_time,
+                            "open": new_candle.open,
+                            "high": new_candle.high,
+                            "low": new_candle.low,
+                            "close": new_candle.close,
+                            "volume": new_candle.volume,
+                        }]
+                    )
+                    LOG.info(f"[breakout] ✅ Saved candle to database: {current_candle_time}")
+                except Exception as e:
+                    LOG.exception(f"[breakout] ❌ Failed to save candle to database: {e}")
         else:
             current_candle = self._candles[-1]
             old_high = current_candle.high

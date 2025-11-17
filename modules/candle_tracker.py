@@ -39,7 +39,7 @@ class CandleData:
 class CandleTracker:
     """
     Tracks candles in a database for recovery after deploys.
-    
+
     When a strategy builds candles, they're saved here. On startup,
     candles are automatically loaded so the strategy can resume immediately.
     """
@@ -47,7 +47,7 @@ class CandleTracker:
     def __init__(self, db_path: str = "pnl_trades.db"):
         """
         Initialize candle tracker.
-        
+
         Uses the same database as PnL tracker for simplicity.
         """
         self.db_path = db_path
@@ -91,7 +91,7 @@ class CandleTracker:
         """Save or update candles for a strategy."""
         if not candles:
             return
-        
+
         async with self._lock:
             try:
                 conn = self._conn
@@ -99,7 +99,7 @@ class CandleTracker:
                     return
 
                 now = time.time()
-                
+
                 # Use INSERT OR REPLACE to handle updates
                 for candle in candles:
                     conn.execute("""
@@ -119,7 +119,7 @@ class CandleTracker:
                     ))
 
                 conn.commit()
-                LOG.debug(f"[candle_tracker] Saved {len(candles)} candles for {strategy} {market}")
+                LOG.info(f"[candle_tracker] ✅ Saved {len(candles)} candles for {strategy} {market}")
             except Exception as e:
                 LOG.exception(f"[candle_tracker] Error saving candles: {e}")
 
@@ -151,7 +151,7 @@ class CandleTracker:
                     })
 
                 if candles:
-                    LOG.info(f"[candle_tracker] Loaded {len(candles)} candles for {strategy} {market}")
+                    LOG.info(f"[candle_tracker] ✅ Loaded {len(candles)} candles for {strategy} {market} (oldest: {candles[0]['open_time']}, newest: {candles[-1]['open_time']})")
                 return candles
             except Exception as e:
                 LOG.exception(f"[candle_tracker] Error loading candles: {e}")

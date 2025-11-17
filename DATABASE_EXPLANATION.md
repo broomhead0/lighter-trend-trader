@@ -121,10 +121,10 @@ On Railway (cloud):
 
 ## Key Takeaways
 
-✅ **One database file** = One filing cabinet  
-✅ **Three tables** = Three drawers  
-✅ **Survives deploys** = Filing cabinet stays, desk gets cleared  
-✅ **Fast queries** = Indexes help find things quickly  
-✅ **Safe writes** = Transactions ensure nothing gets lost  
+✅ **One database file** = One filing cabinet
+✅ **Three tables** = Three drawers
+✅ **Survives deploys** = Filing cabinet stays, desk gets cleared
+✅ **Fast queries** = Indexes help find things quickly
+✅ **Safe writes** = Transactions ensure nothing gets lost
 ✅ **Backups** = Copies of the filing cabinet made regularly
 
