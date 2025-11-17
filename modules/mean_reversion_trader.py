@@ -196,7 +196,7 @@ class MeanReversionTrader:
     async def run(self):
         """Main trading loop."""
         LOG.info(f"[mean_reversion] starting trading loop (candle interval: {self.candle_interval_seconds}s)")
-        
+
         # Check for existing position on startup (recover from deploy)
         await self._recover_existing_position()
 
@@ -276,14 +276,14 @@ class MeanReversionTrader:
         """Check for existing position on exchange and recover state."""
         if self.dry_run or not self.trading_client:
             return
-        
+
         try:
             # Get current price
             current_price = self._get_current_price()
             if not current_price:
                 LOG.warning("[mean_reversion] Cannot recover position: no current price available")
                 return
-            
+
             # Try to get position from signer client if available
             try:
                 if hasattr(self.trading_client, "_signer") and self.trading_client._signer:
@@ -296,7 +296,7 @@ class MeanReversionTrader:
                     )
             except Exception as e:
                 LOG.debug(f"[mean_reversion] Could not check exchange positions: {e}")
-                
+
         except Exception as e:
             LOG.exception(f"[mean_reversion] error recovering position: {e}")
 

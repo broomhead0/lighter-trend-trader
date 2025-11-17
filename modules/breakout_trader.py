@@ -188,6 +188,9 @@ class BreakoutTrader:
     async def run(self) -> None:
         """Main trading loop."""
         LOG.info("[breakout] starting trading loop")
+        
+        # Check for existing position on startup (recover from deploy)
+        await self._recover_existing_position()
 
         # Initial candle fetch
         await self._fetch_candles()
@@ -257,6 +260,34 @@ class BreakoutTrader:
             except Exception as e:
                 LOG.exception("[breakout] error in trading loop: %s", e)
                 await asyncio.sleep(10.0)
+
+    async def _recover_existing_position(self) -> None:
+        """Check for existing position on exchange and recover state."""
+        if self.dry_run or not self.trading_client:
+            return
+        
+        try:
+            # Get current price
+            current_price = self._get_current_price()
+            if not current_price:
+                LOG.warning("[breakout] Cannot recover position: no current price available")
+                return
+            
+            # Try to get position from signer client if available
+            try:
+                if hasattr(self.trading_client, "_signer") and self.trading_client._signer:
+                    await self.trading_client.ensure_ready()
+                    LOG.info("[breakout] Checking for existing positions on exchange...")
+                    LOG.warning(
+                        "[breakout] ⚠️  Position recovery: If you have an open position, "
+                        "the bot will not manage it until it's manually closed or the bot takes a new trade. "
+                        "Consider manually closing profitable positions or wait for exit conditions to trigger."
+                    )
+            except Exception as e:
+                LOG.debug(f"[breakout] Could not check exchange positions: {e}")
+                
+        except Exception as e:
+            LOG.exception(f"[breakout] error recovering position: {e}")
 
     async def stop(self) -> None:
         """Stop the trader."""

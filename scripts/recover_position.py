@@ -41,29 +41,29 @@ async def recover_position(
     """Recover position information from exchange."""
     LOG.info(f"Connecting to {base_url}...")
     LOG.info(f"Account: {account_index}, API Key: {api_key_index}")
-    
+
     signer = SignerClient(
         url=base_url,
         private_key=api_key_private_key,
         account_index=account_index,
         api_key_index=api_key_index,
     )
-    
+
     err = signer.check_client()
     if err:
         LOG.error(f"Signer client health check failed: {err}")
         return
-    
+
     LOG.info("✓ Connected successfully")
-    
+
     # Parse market
     if ":" not in market:
         LOG.error(f"Invalid market format: {market}. Expected format: market:2")
         return
-    
+
     market_id = int(market.split(":")[1])
     LOG.info(f"Checking positions for market: {market} (ID: {market_id})")
-    
+
     # Note: lighter-python may not have direct position query methods
     # This is a placeholder - you may need to check the UI or use WebSocket account_all channel
     LOG.warning("⚠️  Direct position query not available in lighter-python SDK")
@@ -78,7 +78,7 @@ async def recover_position(
     LOG.info("  a) Manually close it in the UI if profitable")
     LOG.info("  b) Wait for the bot to take a new trade (it will then manage positions)")
     LOG.info("  c) Use the position recovery feature (if implemented)")
-    
+
     await signer.close()
 
 
@@ -89,9 +89,9 @@ def main():
     parser.add_argument("--api-key-private-key", type=str, required=True, help="API key private key")
     parser.add_argument("--market", type=str, default="market:2", help="Market (default: market:2)")
     parser.add_argument("--base-url", type=str, default="https://mainnet.zklighter.elliot.ai", help="Base URL")
-    
+
     args = parser.parse_args()
-    
+
     asyncio.run(
         recover_position(
             account_index=args.account_index,
