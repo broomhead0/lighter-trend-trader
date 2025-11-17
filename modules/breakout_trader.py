@@ -696,13 +696,22 @@ class BreakoutTrader:
         """Check if ATR is expanding (current > average of recent ATRs)."""
         if len(candles) < self.atr_period * 2:
             return False
+        
+        # Handle None ATR
+        if current_atr is None or current_atr <= 0:
+            return False
 
         # Compute ATR for last 5 periods
         recent_atrs = []
         for i in range(5):
             if len(candles) >= self.atr_period + i:
-                atr_val = self._compute_atr(candles[:-(i or None) or len(candles)], self.atr_period)
-                recent_atrs.append(atr_val)
+                # Slice candles: for i=0 use all, for i>0 use [:-(i)]
+                if i == 0:
+                    atr_val = self._compute_atr(candles, self.atr_period)
+                else:
+                    atr_val = self._compute_atr(candles[:-i], self.atr_period)
+                if atr_val is not None and atr_val > 0:
+                    recent_atrs.append(atr_val)
 
         if not recent_atrs:
             return False
