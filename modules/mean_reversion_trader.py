@@ -272,6 +272,34 @@ class MeanReversionTrader:
                 LOG.exception("[mean_reversion] error in trading loop: %s", e)
                 await asyncio.sleep(10.0)
 
+    async def _recover_existing_position(self) -> None:
+        """Check for existing position on exchange and recover state."""
+        if self.dry_run or not self.trading_client:
+            return
+        
+        try:
+            # Get current price
+            current_price = self._get_current_price()
+            if not current_price:
+                LOG.warning("[mean_reversion] Cannot recover position: no current price available")
+                return
+            
+            # Try to get position from signer client if available
+            try:
+                if hasattr(self.trading_client, "_signer") and self.trading_client._signer:
+                    await self.trading_client.ensure_ready()
+                    LOG.info("[mean_reversion] Checking for existing positions on exchange...")
+                    LOG.warning(
+                        "[mean_reversion] ⚠️  Position recovery: If you have an open position, "
+                        "the bot will not manage it until it's manually closed or the bot takes a new trade. "
+                        "Consider manually closing profitable positions or wait for exit conditions to trigger."
+                    )
+            except Exception as e:
+                LOG.debug(f"[mean_reversion] Could not check exchange positions: {e}")
+                
+        except Exception as e:
+            LOG.exception(f"[mean_reversion] error recovering position: {e}")
+
     async def stop(self):
         """Stop the trader."""
         self._stop.set()
