@@ -198,7 +198,7 @@ class RenkoAOTrader:
 
         # Check for existing position on startup (recover from deploy)
         await self._recover_existing_position()
-        
+
         # Load saved bricks and price history from database (recover from deploy)
         await self._recover_renko_state()
 
@@ -325,7 +325,7 @@ class RenkoAOTrader:
         """Load saved Renko bricks and price history from database on startup."""
         if not self.renko_tracker:
             return
-        
+
         try:
             # Load bricks
             saved_bricks = await self.renko_tracker.load_bricks("renko_ao", self.market, limit=200)
@@ -341,14 +341,14 @@ class RenkoAOTrader:
                         low=b["low"],
                     )
                     self._renko_bricks.append(brick)
-                
+
                 LOG.warning(
                     f"[renko_ao] ✅ RECOVERED {len(saved_bricks)} BRICKS FROM DATABASE "
                     f"(oldest: {saved_bricks[0]['open_time']}, newest: {saved_bricks[-1]['open_time']})"
                 )
             else:
                 LOG.info("[renko_ao] No saved bricks found in database, starting fresh")
-            
+
             # Load price history
             saved_prices = await self.renko_tracker.load_price_history("renko_ao", self.market, limit=1000)
             if saved_prices:
@@ -434,7 +434,7 @@ class RenkoAOTrader:
             completed_brick = self._current_brick  # Save reference before creating new brick
             self._renko_bricks.append(completed_brick)
             self._price_history.append(new_close)
-            
+
             # Save completed brick to database
             if self.renko_tracker:
                 try:

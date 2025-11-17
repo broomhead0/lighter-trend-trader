@@ -28,7 +28,7 @@ LOG = logging.getLogger("renko_tracker")
 class RenkoTracker:
     """
     Tracks Renko bricks and price history in a database for recovery after deploys.
-    
+
     When a strategy builds bricks, they're saved here. On startup,
     bricks are automatically loaded so the strategy can resume immediately.
     """
@@ -36,7 +36,7 @@ class RenkoTracker:
     def __init__(self, db_path: str = "pnl_trades.db"):
         """
         Initialize Renko tracker.
-        
+
         Uses the same database as PnL tracker for simplicity.
         """
         self.db_path = db_path
@@ -93,7 +93,7 @@ class RenkoTracker:
         """Save or update Renko bricks for a strategy."""
         if not bricks:
             return
-        
+
         async with self._lock:
             try:
                 conn = self._conn
@@ -101,7 +101,7 @@ class RenkoTracker:
                     return
 
                 now = time.time()
-                
+
                 # Use INSERT OR REPLACE to handle updates
                 for brick in bricks:
                     conn.execute("""
@@ -163,7 +163,7 @@ class RenkoTracker:
         """Save price history for a strategy."""
         if not prices:
             return
-        
+
         async with self._lock:
             try:
                 conn = self._conn
@@ -176,7 +176,7 @@ class RenkoTracker:
 
                 # Clear old history and save new (keep last 1000)
                 conn.execute("DELETE FROM price_history WHERE strategy = ? AND market = ?", (strategy, market))
-                
+
                 for price, ts in zip(prices[-1000:], timestamps[-1000:]):  # Keep last 1000
                     conn.execute("""
                         INSERT INTO price_history (
@@ -206,7 +206,7 @@ class RenkoTracker:
                 """, (strategy, market, limit))
 
                 prices = [row[0] for row in cursor.fetchall()]
-                
+
                 if prices:
                     LOG.info(f"[renko_tracker] ✅ Loaded {len(prices)} price points for {strategy} {market}")
                 return prices

@@ -180,7 +180,7 @@ async def main():
     # Initialize candle tracker (uses same database)
     candle_tracker = CandleTracker(db_path=pnl_db_path)
     LOG.info(f"Candle tracker initialized: {pnl_db_path} (persists candles across deploys)")
-    
+
     # Initialize Renko tracker (uses same database)
     renko_tracker = RenkoTracker(db_path=pnl_db_path)
     LOG.info(f"Renko tracker initialized: {pnl_db_path} (persists bricks and price history across deploys)")

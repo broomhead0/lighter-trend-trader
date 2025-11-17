@@ -131,6 +131,19 @@ class CandleTracker:
                 if not conn:
                     return []
 
+                # Debug: Check what's in the database
+                debug_cursor = conn.execute("""
+                    SELECT COUNT(*) FROM candles WHERE strategy = ? AND market = ?
+                """, (strategy, market))
+                count = debug_cursor.fetchone()[0]
+                LOG.info(f"[candle_tracker] DEBUG: Found {count} candles in DB for {strategy} {market} (db_path={self.db_path})")
+                
+                # Also check all strategies/markets
+                all_cursor = conn.execute("SELECT strategy, market, COUNT(*) FROM candles GROUP BY strategy, market")
+                all_counts = all_cursor.fetchall()
+                if all_counts:
+                    LOG.info(f"[candle_tracker] DEBUG: All candles in DB: {all_counts}")
+
                 cursor = conn.execute("""
                     SELECT open_time, open, high, low, close, volume
                     FROM candles
@@ -152,6 +165,8 @@ class CandleTracker:
 
                 if candles:
                     LOG.info(f"[candle_tracker] ✅ Loaded {len(candles)} candles for {strategy} {market} (oldest: {candles[0]['open_time']}, newest: {candles[-1]['open_time']})")
+                else:
+                    LOG.warning(f"[candle_tracker] ⚠️ No candles loaded for {strategy} {market} (query returned 0 rows)")
                 return candles
             except Exception as e:
                 LOG.exception(f"[candle_tracker] Error loading candles: {e}")
