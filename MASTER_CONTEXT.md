@@ -1,6 +1,6 @@
 # Master Context Document - Lighter Trend Trader
 
-**Last Updated:** 2025-11-16 (breakout strategy planning - exploring new approaches)
+**Last Updated:** 2025-11-17 (candle persistence, database system, full continuity across deploys)
 **Purpose:** This document contains all critical context needed to understand and work with this project when context is lost.
 
 ---
@@ -150,6 +150,13 @@
 - R:R target: 2:1-3:1
 - PnL target: +0.3-0.8% per day
 
+**Candle Persistence (NEW - 2025-11-17):**
+- **Problem Solved**: Previously took 12.5 hours to collect 50 candles after each deploy
+- **Solution**: Candles saved to database, automatically recovered on startup
+- **Result**: Breakout strategy ready to trade immediately after deploys
+- **Implementation**: `CandleTracker` module saves/loads candles from database
+- **Status**: ✅ Implemented and active
+
 ---
 
 ## Configuration System
@@ -276,6 +283,20 @@ railway variables --set "ACCOUNT_INDEX=281474976639501" \
 - **Environment Variable**: `PNL_DB_PATH=/tmp/pnl_trades.db` (already set in Railway)
 - **Backup Config**: Enabled by default (`pnl_backup.enabled: true`)
 - **Query Tool**: `scripts/query_pnl.py` for analysis (see Performance Tracking section)
+
+**Continuity Across Deploys (CRITICAL - 2025-11-17):**
+- **Positions**: Automatically recovered from database on startup (all strategies)
+  - RSI+BB, Renko+AO, Breakout all recover positions on startup
+  - Bot resumes managing positions immediately after deploy
+- **Candles**: Automatically recovered from database on startup (breakout strategy)
+  - Previously: 12.5 hours to collect 50 candles after each deploy
+  - Now: Candles loaded instantly, ready to trade immediately
+  - Saved on creation/update, loaded on startup
+- **Trades**: All trades saved to database for historical analysis
+  - Every closed position automatically recorded
+  - Persists across deploys for PnL analysis
+- **No Data Loss**: Everything persists across deploys - bot picks up exactly where it left off
+- **Principle**: From now on, all new features must have continuity - nothing should reset on deploy
 
 **Safety Check:** `main.py` warns if account_index == 366110
 
@@ -461,21 +482,44 @@ trader = StrategyTrader(
 
 ## Performance Tracking
 
-### PnL Tracker (Database-Backed for High Volume)
+### Database System (SQLite)
 
-**For 100k+ trades, we use a database-backed PnL tracker:**
-- **Storage**: SQLite with WAL mode (can handle millions of trades)
-- **Location**: Auto-detects best path (`/data`, `/persist`, `/tmp`, or local)
+**Architecture:**
+- **Single Database File**: `pnl_trades.db` (one file, three tables)
+- **Storage**: SQLite with WAL mode (Write-Ahead Logging for better concurrency)
+- **Location**: Auto-detects persistent path (`/data`, `/persist`, `/tmp`, or local)
 - **Railway**: Uses `/tmp/pnl_trades.db` (set via `PNL_DB_PATH` env var)
-- **Performance**: <10ms queries, <1ms writes
-- **Features**: Per-strategy tracking, time-based filtering, fast aggregation
-- **Persistence**: Database survives deployments (stored on persistent path)
+- **Performance**: <10ms queries, <1ms writes, handles 100k+ trades efficiently
 
-**Automatic Recording:**
-- Every closed position is automatically recorded to the database
-- Tracks: strategy, side, entry/exit prices, PnL %, size, timestamps, exit reason, market
-- No performance impact (async, non-blocking)
-- All trades persisted for historical analysis
+**Three Tables in One Database:**
+
+1. **`trades`** - Completed trade records
+   - Stores: strategy, side, entry/exit prices, PnL %, size, timestamps, exit reason, market
+   - Purpose: Historical PnL analysis, performance tracking
+   - Auto-recorded: Every closed position automatically saved
+
+2. **`positions`** - Open position state
+   - Stores: strategy, market, side, entry_price, size, stop_loss, take_profit, entry_time, scaled_entries
+   - Purpose: Recover positions after deploys (all strategies)
+   - Auto-recovered: Loaded on startup, bot resumes managing positions
+
+3. **`candles`** - OHLCV candle data
+   - Stores: strategy, market, open_time, open, high, low, close, volume
+   - Purpose: Recover candle history after deploys (breakout strategy)
+   - Auto-recovered: Loaded on startup, no more 12.5-hour wait after deploys
+
+**How It Works:**
+- **WAL Mode**: Changes written to log first, then committed (allows concurrent reads)
+- **Transactions**: Each write is atomic (all-or-nothing, rollback on failure)
+- **Indexes**: Fast lookups on strategy, market, timestamps
+- **Persistence**: Data written to disk immediately, survives container restarts
+
+**ELI5 Explanation:**
+- Database = One filing cabinet (`pnl_trades.db`)
+- Three drawers = Three tables (trades, positions, candles)
+- Memory = Your desk (cleared on restart)
+- Database = Filing cabinet (permanent, survives restarts)
+- On deploy: Bot opens filing cabinet, reads what it saved, continues where it left off
 
 **Persistent Storage:**
 - **Database Path**: `/tmp/pnl_trades.db` (Railway) - persists across deployments
@@ -483,6 +527,8 @@ trader = StrategyTrader(
 - **Backup Config**: Enabled by default in `config.yaml` (`pnl_backup.enabled: true`)
 - **Backup Interval**: 3600 seconds (1 hour)
 - **Backup Methods Supported**: Local, S3, Webhook (see `PERSISTENT_STORAGE.md`)
+
+**See `DATABASE_EXPLANATION.md` for full technical details and ELI5 explanation.**
 
 **Query PnL Statistics:**
 ```bash
