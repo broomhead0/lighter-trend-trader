@@ -153,8 +153,28 @@ async def main():
     state = StateStore()
 
     # Initialize PnL tracker (database-backed for high volume)
-    pnl_tracker = PnLTracker(db_path=os.environ.get("PNL_DB_PATH", "pnl_trades.db"))
-    LOG.info("PnL tracker initialized (database-backed for high volume)")
+    # Use persistent path: Railway volumes mount at /data, fallback to /tmp for local
+    pnl_db_path = os.environ.get("PNL_DB_PATH")
+    if not pnl_db_path:
+        # Try Railway persistent volume first, then local fallback
+        if os.path.exists("/data"):
+            pnl_db_path = "/data/pnl_trades.db"
+            os.makedirs("/data", exist_ok=True)
+        else:
+            pnl_db_path = "pnl_trades.db"
+    
+    pnl_tracker = PnLTracker(db_path=pnl_db_path)
+    LOG.info(f"PnL tracker initialized: {pnl_db_path} (database-backed for high volume)")
+    
+    # Initialize backup if configured
+    backup_config = cfg.get("pnl_backup") or {}
+    if backup_config.get("enabled", False):
+        from modules.pnl_backup import PnLBackup
+        pnl_backup = PnLBackup(pnl_db_path, backup_config)
+        LOG.info("PnL backup enabled")
+    else:
+        pnl_backup = None
+        LOG.info("PnL backup disabled (set pnl_backup.enabled=true in config to enable)")
 
     # Helper function to create trading client from config
     def create_trading_client(strategy_api_cfg: Optional[Dict[str, Any]] = None) -> Optional[TradingClient]:
@@ -320,6 +340,14 @@ async def main():
         except NotImplementedError:
             pass
 
+    # Periodic backup task
+    async def backup_loop():
+        """Periodic backup of PnL database."""
+        if pnl_backup:
+            while not stop_event.is_set():
+                await pnl_backup.backup()
+                await asyncio.sleep(300)  # Check every 5 minutes
+    
     # Run traders and price feed in parallel
     tasks = [price_feed.run(), stop_event.wait()]
 
@@ -329,6 +357,9 @@ async def main():
         tasks.append(renko_ao_trader.run())
     if breakout_trader:
         tasks.append(breakout_trader.run())
+    
+    if pnl_backup:
+        tasks.append(backup_loop())
 
     try:
         await asyncio.gather(*tasks, return_exceptions=True)
