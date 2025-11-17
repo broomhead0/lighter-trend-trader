@@ -170,7 +170,7 @@ async def main():
 
     pnl_tracker = PnLTracker(db_path=pnl_db_path)
     LOG.info(f"PnL tracker initialized: {pnl_db_path} (database-backed for high volume)")
-    
+
     # Initialize position tracker (uses same database)
     position_tracker = PositionTracker(db_path=pnl_db_path)
     LOG.info(f"Position tracker initialized: {pnl_db_path} (persists positions across deploys)")

@@ -288,7 +288,7 @@ class RenkoAOTrader:
         """Check for existing position in database and recover state."""
         if self.dry_run or not self.position_tracker:
             return
-        
+
         try:
             # Load position from database
             position = await self.position_tracker.load_position("renko_ao", self.market)
@@ -299,7 +299,7 @@ class RenkoAOTrader:
                     self._scaled_entries = position.get("scaled_entries", [])
                 else:
                     self._scaled_entries = []
-                
+
                 LOG.warning(
                     f"[renko_ao] ✅ RECOVERED POSITION FROM DATABASE: "
                     f"{position['side']} {position['size']:.4f} SOL @ {position['entry_price']:.2f} "
@@ -1127,7 +1127,7 @@ class RenkoAOTrader:
                 f"[renko_ao] position updated: avg_entry={new_avg_entry:.2f}, "
                 f"total_size={total_size:.4f}, stop_loss={pos['stop_loss']:.2f}"
             )
-            
+
             # Update position in database (with scaled entries)
             pos["scaled_entries"] = self._scaled_entries
             if self.position_tracker:

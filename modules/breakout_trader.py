@@ -266,7 +266,7 @@ class BreakoutTrader:
         """Check for existing position in database and recover state."""
         if self.dry_run or not self.position_tracker:
             return
-        
+
         try:
             # Load position from database
             position = await self.position_tracker.load_position("breakout", self.market)

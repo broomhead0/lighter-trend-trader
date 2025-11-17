@@ -46,7 +46,7 @@ class PositionState:
 class PositionTracker:
     """
     Tracks open positions in a database for recovery after deploys.
-    
+
     When a strategy enters a position, it's saved here. On startup,
     positions are automatically loaded and the strategy can resume managing them.
     """
@@ -54,7 +54,7 @@ class PositionTracker:
     def __init__(self, db_path: str = "pnl_trades.db"):
         """
         Initialize position tracker.
-        
+
         Uses the same database as PnL tracker for simplicity.
         """
         self.db_path = db_path
@@ -115,14 +115,14 @@ class PositionTracker:
                     scaled_entries = str(scaled_entries)
 
                 now = time.time()
-                
+
                 # Use INSERT OR REPLACE to handle updates
                 conn.execute("""
                     INSERT OR REPLACE INTO positions (
                         strategy, side, entry_price, size, stop_loss, take_profit,
                         entry_time, entry_ao, order_index, initial_size,
                         scaled_entries, market, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                         COALESCE((SELECT created_at FROM positions WHERE strategy=? AND market=?), ?),
                         ?)
                 """, (

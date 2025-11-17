@@ -126,10 +126,11 @@ class PnLTracker:
                     exit_reason, market, time.time()
                 ))
                 self._conn.commit()
-                LOG.debug(f"[pnl_tracker] Recorded trade: {strategy} {side} {pnl_pct:.2f}%")
+                LOG.info(f"[pnl_tracker] ✅ Recorded trade: {strategy} {side} {pnl_pct:.2f}% (entry={entry_price:.2f}, exit={exit_price:.2f}, size={size:.4f})")
             except Exception as e:
-                LOG.exception(f"[pnl_tracker] Error recording trade: {e}")
+                LOG.exception(f"[pnl_tracker] ❌ Error recording trade: {e}")
                 self._conn.rollback()
+                raise  # Re-raise to surface the error
 
     async def get_stats(
         self,

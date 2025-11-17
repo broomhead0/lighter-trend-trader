@@ -277,7 +277,7 @@ class MeanReversionTrader:
         """Check for existing position in database and recover state."""
         if self.dry_run or not self.position_tracker:
             return
-        
+
         try:
             # Load position from database
             position = await self.position_tracker.load_position("mean_reversion", self.market)
@@ -1066,18 +1066,25 @@ class MeanReversionTrader:
 
                 # Record in PnL tracker if available
                 if hasattr(self, "pnl_tracker") and self.pnl_tracker:
-                    await self.pnl_tracker.record_trade(
-                        strategy="mean_reversion",
-                        side=pos["side"],
-                        entry_price=pos["entry_price"],
-                        exit_price=current_price,
-                        size=pos["size"],
-                        pnl_pct=pnl_pct,
-                        entry_time=pos["entry_time"],
-                        exit_time=time.time(),
-                        exit_reason=reason,
-                        market=self.market,
-                    )
+                    try:
+                        LOG.info(f"[mean_reversion] Recording trade to PnL tracker: {pos['side']} {pnl_pct:.2f}%")
+                        await self.pnl_tracker.record_trade(
+                            strategy="mean_reversion",
+                            side=pos["side"],
+                            entry_price=pos["entry_price"],
+                            exit_price=current_price,
+                            size=pos["size"],
+                            pnl_pct=pnl_pct,
+                            entry_time=pos["entry_time"],
+                            exit_time=time.time(),
+                            exit_reason=reason,
+                            market=self.market,
+                        )
+                        LOG.info(f"[mean_reversion] ✅ Trade recorded successfully")
+                    except Exception as e:
+                        LOG.exception(f"[mean_reversion] ❌ Failed to record trade to PnL tracker: {e}")
+                else:
+                    LOG.warning(f"[mean_reversion] ⚠️  PnL tracker not available (hasattr={hasattr(self, 'pnl_tracker')}, tracker={getattr(self, 'pnl_tracker', None)})")
 
             # Delete position from database
             if self.position_tracker:
