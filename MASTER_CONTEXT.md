@@ -292,9 +292,15 @@ railway variables --set "ACCOUNT_INDEX=281474976639501" \
   - Previously: 12.5 hours to collect 50 candles after each deploy
   - Now: Candles loaded instantly, ready to trade immediately
   - Saved on creation/update, loaded on startup
+- **Renko Bricks**: (To be implemented) Will persist bricks and price history
+  - Currently: Lost on deploy, need to rebuild 20-30 bricks (takes hours)
+  - Future: Bricks loaded instantly, ready to trade immediately
 - **Trades**: All trades saved to database for historical analysis
   - Every closed position automatically recorded
   - Persists across deploys for PnL analysis
+- **Trade Context**: (To be implemented) Enhanced analytics for all strategies
+  - Entry conditions, market context, MFE/MAE, exit quality
+  - Enables pattern analysis and optimization
 - **No Data Loss**: Everything persists across deploys - bot picks up exactly where it left off
 - **Principle**: From now on, all new features must have continuity - nothing should reset on deploy
 
