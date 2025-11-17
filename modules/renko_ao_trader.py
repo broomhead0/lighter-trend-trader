@@ -393,7 +393,7 @@ class RenkoAOTrader:
         atr = sum(recent_trs) / len(recent_trs)
         return atr
 
-    def _update_renko(self, price: float) -> None:
+    async def _update_renko(self, price: float) -> None:
         """Update Renko bricks based on price movement (ATR-based brick size)."""
         if self._current_renko_brick_size is None or self._current_renko_brick_size <= 0:
             return
