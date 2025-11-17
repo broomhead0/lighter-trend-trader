@@ -96,6 +96,7 @@ class RenkoAOTrader:
         self.trading_client = trading_client
         self.alerts = alert_manager
         self.telemetry = telemetry
+        self.position_tracker = None  # Will be set by main.py
 
         trader_cfg = (self.cfg.get("renko_ao") or {}) if isinstance(self.cfg.get("renko_ao"), dict) else {}
 
@@ -284,37 +285,32 @@ class RenkoAOTrader:
                 await asyncio.sleep(5.0)
 
     async def _recover_existing_position(self) -> None:
-        """Check for existing position on exchange and recover state."""
-        if self.dry_run or not self.trading_client:
+        """Check for existing position in database and recover state."""
+        if self.dry_run or not self.position_tracker:
             return
-
+        
         try:
-            # Try to query position from exchange via API
-            # Note: This requires checking if lighter-python has position query methods
-            # For now, we'll use a conservative approach: assume no position unless we can verify
-
-            # Get current price
-            current_price = self._get_current_price()
-            if not current_price:
-                LOG.warning("[renko_ao] Cannot recover position: no current price available")
-                return
-
-            # Try to get position from signer client if available
-            try:
-                if hasattr(self.trading_client, "_signer") and self.trading_client._signer:
-                    await self.trading_client.ensure_ready()
-                    # Check if signer has position query method
-                    # Note: lighter-python may not expose this directly, so we'll log a warning
-                    LOG.info("[renko_ao] Checking for existing positions on exchange...")
-                    # For now, we can't directly query, but we'll add a manual recovery option
-                    LOG.warning(
-                        "[renko_ao] ⚠️  Position recovery: If you have an open position, "
-                        "the bot will not manage it until it's manually closed or the bot takes a new trade. "
-                        "Consider manually closing profitable positions or wait for exit conditions to trigger."
-                    )
-            except Exception as e:
-                LOG.debug(f"[renko_ao] Could not check exchange positions: {e}")
-
+            # Load position from database
+            position = await self.position_tracker.load_position("renko_ao", self.market)
+            if position:
+                self._current_position = position
+                # Restore scaled entries if any
+                if position.get("scaled_entries"):
+                    self._scaled_entries = position.get("scaled_entries", [])
+                else:
+                    self._scaled_entries = []
+                
+                LOG.warning(
+                    f"[renko_ao] ✅ RECOVERED POSITION FROM DATABASE: "
+                    f"{position['side']} {position['size']:.4f} SOL @ {position['entry_price']:.2f} "
+                    f"(entry_time: {position['entry_time']:.0f}, age: {(time.time() - position['entry_time'])/60:.1f} min)"
+                )
+                LOG.warning(
+                    f"[renko_ao] Position will be managed with current exit logic. "
+                    f"TP: {position['take_profit']:.2f}, SL: {position['stop_loss']:.2f}"
+                )
+            else:
+                LOG.info("[renko_ao] No saved position found in database")
         except Exception as e:
             LOG.exception(f"[renko_ao] error recovering position: {e}")
 
@@ -773,6 +769,9 @@ class RenkoAOTrader:
                     "order_index": 0,
                 }
                 self._scaled_entries = []  # Reset scaled entries for new position
+                # Save position to database
+                if self.position_tracker:
+                    await self.position_tracker.save_position("renko_ao", self._current_position, self.market)
             else:
                 # Place entry order with retry logic for API errors
                 max_retries = 3
@@ -828,6 +827,9 @@ class RenkoAOTrader:
                     "order_index": order.client_order_index,
                 }
                 self._scaled_entries = []  # Reset scaled entries for new position
+                # Save position to database
+                if self.position_tracker:
+                    await self.position_tracker.save_position("renko_ao", self._current_position, self.market)
 
         except Exception as e:
             LOG.exception("[renko_ao] error entering position: %s", e)
@@ -1004,6 +1006,9 @@ class RenkoAOTrader:
                         market=self.market,
                     )
 
+            # Delete position from database
+            if self.position_tracker:
+                await self.position_tracker.delete_position("renko_ao", self.market)
             self._current_position = None
             self._scaled_entries = []  # Clear scaled entries
             self._last_exit_time = time.time()  # Record exit time for cooldown

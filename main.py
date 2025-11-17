@@ -17,6 +17,7 @@ from modules.renko_ao_trader import RenkoAOTrader
 from modules.breakout_trader import BreakoutTrader
 from modules.ws_price_feed import WebSocketPriceFeed
 from modules.pnl_tracker import PnLTracker
+from modules.position_tracker import PositionTracker
 
 LOG = logging.getLogger("main")
 
@@ -169,6 +170,10 @@ async def main():
 
     pnl_tracker = PnLTracker(db_path=pnl_db_path)
     LOG.info(f"PnL tracker initialized: {pnl_db_path} (database-backed for high volume)")
+    
+    # Initialize position tracker (uses same database)
+    position_tracker = PositionTracker(db_path=pnl_db_path)
+    LOG.info(f"Position tracker initialized: {pnl_db_path} (persists positions across deploys)")
 
     # Initialize backup if configured
     backup_config = cfg.get("pnl_backup") or {}
@@ -255,6 +260,7 @@ async def main():
                 telemetry=None,
             )
             rsi_bb_trader.pnl_tracker = pnl_tracker  # Attach PnL tracker
+            rsi_bb_trader.position_tracker = position_tracker  # Attach position tracker
             if rsi_bb_api_cfg:
                 LOG.info(f"RSI + BB trader initialized with dedicated account {rsi_bb_api_cfg.get('account_index')}")
             else:
@@ -281,6 +287,7 @@ async def main():
                 telemetry=None,
             )
             renko_ao_trader.pnl_tracker = pnl_tracker  # Attach PnL tracker
+            renko_ao_trader.position_tracker = position_tracker  # Attach position tracker
             if renko_ao_api_cfg:
                 LOG.info(f"Renko + AO trader initialized with dedicated account {renko_ao_api_cfg.get('account_index')}")
             else:
@@ -307,6 +314,7 @@ async def main():
                 telemetry=None,
             )
             breakout_trader.pnl_tracker = pnl_tracker  # Attach PnL tracker
+            breakout_trader.position_tracker = position_tracker  # Attach position tracker
             if breakout_api_cfg:
                 LOG.info(f"Breakout trader initialized with dedicated account {breakout_api_cfg.get('account_index')}")
             else:

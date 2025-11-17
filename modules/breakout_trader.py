@@ -188,7 +188,7 @@ class BreakoutTrader:
     async def run(self) -> None:
         """Main trading loop."""
         LOG.info("[breakout] starting trading loop")
-        
+
         # Check for existing position on startup (recover from deploy)
         await self._recover_existing_position()
 
@@ -265,14 +265,14 @@ class BreakoutTrader:
         """Check for existing position on exchange and recover state."""
         if self.dry_run or not self.trading_client:
             return
-        
+
         try:
             # Get current price
             current_price = self._get_current_price()
             if not current_price:
                 LOG.warning("[breakout] Cannot recover position: no current price available")
                 return
-            
+
             # Try to get position from signer client if available
             try:
                 if hasattr(self.trading_client, "_signer") and self.trading_client._signer:
@@ -285,7 +285,7 @@ class BreakoutTrader:
                     )
             except Exception as e:
                 LOG.debug(f"[breakout] Could not check exchange positions: {e}")
-                
+
         except Exception as e:
             LOG.exception(f"[breakout] error recovering position: {e}")
 
