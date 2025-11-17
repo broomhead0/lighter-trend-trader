@@ -160,15 +160,20 @@ async def main():
     pnl_db_path = os.environ.get("PNL_DB_PATH")
     if not pnl_db_path:
         # Try multiple persistent locations
-        # Railway volumes might be at /data, /persist, or /tmp (persistent)
-        for path in ["/data", "/persist", "/tmp"]:
-            if os.path.exists(path) or path == "/tmp":  # /tmp is usually available
+        # Railway volumes might be at /data, /persist (these are persistent)
+        # /tmp is NOT persistent on Railway, so we avoid it
+        for path in ["/data", "/persist"]:
+            if os.path.exists(path):
                 pnl_db_path = os.path.join(path, "pnl_trades.db")
                 os.makedirs(path, exist_ok=True)
+                LOG.info(f"Using persistent volume: {path}")
                 break
         else:
-            # Final fallback to current directory
-            pnl_db_path = "pnl_trades.db"
+            # If no persistent volume found, use /tmp as fallback (but warn)
+            # Note: /tmp is NOT persistent on Railway, data will be lost on deploy
+            pnl_db_path = "/tmp/pnl_trades.db"
+            os.makedirs("/tmp", exist_ok=True)
+            LOG.warning("⚠️ WARNING: Using /tmp for database (NOT PERSISTENT on Railway). Set PNL_DB_PATH env var or mount a volume at /data or /persist")
 
     pnl_tracker = PnLTracker(db_path=pnl_db_path)
     LOG.info(f"PnL tracker initialized: {pnl_db_path} (database-backed for high volume)")
