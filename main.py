@@ -18,6 +18,7 @@ from modules.breakout_trader import BreakoutTrader
 from modules.ws_price_feed import WebSocketPriceFeed
 from modules.pnl_tracker import PnLTracker
 from modules.position_tracker import PositionTracker
+from modules.candle_tracker import CandleTracker
 
 LOG = logging.getLogger("main")
 
@@ -174,6 +175,10 @@ async def main():
     # Initialize position tracker (uses same database)
     position_tracker = PositionTracker(db_path=pnl_db_path)
     LOG.info(f"Position tracker initialized: {pnl_db_path} (persists positions across deploys)")
+    
+    # Initialize candle tracker (uses same database)
+    candle_tracker = CandleTracker(db_path=pnl_db_path)
+    LOG.info(f"Candle tracker initialized: {pnl_db_path} (persists candles across deploys)")
 
     # Initialize backup if configured
     backup_config = cfg.get("pnl_backup") or {}

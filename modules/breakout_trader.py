@@ -174,6 +174,8 @@ class BreakoutTrader:
 
         # PnL tracker
         self.pnl_tracker = None
+        # Candle tracker (for persistence across deploys)
+        self.candle_tracker = None
 
         # API base URL for fetching candles
         api_cfg = self.cfg.get("api", {})
@@ -192,6 +194,9 @@ class BreakoutTrader:
 
         # Check for existing position on startup (recover from deploy)
         await self._recover_existing_position()
+        
+        # Load saved candles from database (recover from deploy)
+        await self._recover_candles()
 
         # Initial candle fetch
         await self._fetch_candles()
@@ -390,11 +395,42 @@ class BreakoutTrader:
             if len(self._candles) > 200:
                 self._candles = self._candles[-200:]
             LOG.debug(f"[breakout] created new candle at {current_candle_time}, price={price:.2f}")
+            # Save new candle to database
+            if self.candle_tracker:
+                await self.candle_tracker.save_candles(
+                    "breakout",
+                    self.market,
+                    [{
+                        "open_time": new_candle.open_time,
+                        "open": new_candle.open,
+                        "high": new_candle.high,
+                        "low": new_candle.low,
+                        "close": new_candle.close,
+                        "volume": new_candle.volume,
+                    }]
+                )
         else:
             current_candle = self._candles[-1]
+            old_high = current_candle.high
+            old_low = current_candle.low
             current_candle.high = max(current_candle.high, price)
             current_candle.low = min(current_candle.low, price)
             current_candle.close = price
+            # Update in database if candle changed significantly (every 5 seconds to avoid too many writes)
+            if self.candle_tracker and (current_candle.high != old_high or current_candle.low != old_low):
+                if int(time.time()) % 5 == 0:  # Update every 5 seconds
+                    await self.candle_tracker.save_candles(
+                        "breakout",
+                        self.market,
+                        [{
+                            "open_time": current_candle.open_time,
+                            "open": current_candle.open,
+                            "high": current_candle.high,
+                            "low": current_candle.low,
+                            "close": current_candle.close,
+                            "volume": current_candle.volume,
+                        }]
+                    )
 
     def _parse_market_id(self, market: str) -> Optional[int]:
         """Parse market ID from market string (e.g., 'market:2' -> 2)."""
