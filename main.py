@@ -153,14 +153,18 @@ async def main():
     state = StateStore()
 
     # Initialize PnL tracker (database-backed for high volume)
-    # Use persistent path: Railway volumes mount at /data, fallback to /tmp for local
+    # Use persistent path: Check for Railway volume, then fallback to local
     pnl_db_path = os.environ.get("PNL_DB_PATH")
     if not pnl_db_path:
-        # Try Railway persistent volume first, then local fallback
-        if os.path.exists("/data"):
-            pnl_db_path = "/data/pnl_trades.db"
-            os.makedirs("/data", exist_ok=True)
+        # Try multiple persistent locations
+        # Railway volumes might be at /data, /persist, or /tmp (persistent)
+        for path in ["/data", "/persist", "/tmp"]:
+            if os.path.exists(path) or path == "/tmp":  # /tmp is usually available
+                pnl_db_path = os.path.join(path, "pnl_trades.db")
+                os.makedirs(path, exist_ok=True)
+                break
         else:
+            # Final fallback to current directory
             pnl_db_path = "pnl_trades.db"
 
     pnl_tracker = PnLTracker(db_path=pnl_db_path)

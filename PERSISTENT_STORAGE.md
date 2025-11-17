@@ -6,36 +6,39 @@ Railway containers are **ephemeral** - each deployment creates a new container, 
 
 ## Solutions
 
-### Option 1: Railway Persistent Volumes (Recommended)
+### Option 1: Railway Persistent Volumes (If Available)
 
-Railway supports persistent volumes that survive deployments.
+Railway may support persistent volumes, but the interface varies.
 
-**Setup:**
-1. In Railway dashboard → Your Service → Settings → Volumes
-2. Create a new volume (e.g., `pnl-data`)
-3. Mount it at `/data` in your service
+**Alternative: Use /tmp directory**
+Railway's `/tmp` directory is often persistent across deployments. The bot will automatically try:
+1. `/data` (if volume exists)
+2. `/persist` (if volume exists)  
+3. `/tmp` (usually available and persistent)
+4. Local directory (fallback)
 
 **Configuration:**
 ```yaml
 # config.yaml
 pnl_backup:
-  enabled: false  # Not needed if using Railway volume
+  enabled: true  # Enable backups as safety net
+  local_path: /tmp/backups
+  max_backups: 10
 ```
 
-**Environment Variable:**
+**Environment Variable (Optional):**
 ```
-PNL_DB_PATH=/data/pnl_trades.db
+PNL_DB_PATH=/tmp/pnl_trades.db  # Or let it auto-detect
 ```
 
 **Pros:**
-- ✅ Simple setup
-- ✅ No external dependencies
-- ✅ Automatic persistence
-- ✅ Fast access
+- ✅ Works without manual setup
+- ✅ Automatic path detection
+- ✅ Backup system as safety net
 
 **Cons:**
-- ⚠️ Railway-specific (not portable)
-- ⚠️ Limited to Railway platform
+- ⚠️ /tmp may not be persistent on all Railway plans
+- ⚠️ Backups recommended as safety net
 
 ---
 
@@ -136,17 +139,16 @@ pnl_backup:
 
 ## Recommended Setup
 
-**For Railway deployment:**
+**For Railway deployment (Simplest):**
 
-1. **Use Railway Persistent Volume** (Option 1)
-   - Simplest and most reliable
-   - No external dependencies
-   - Automatic persistence
+1. **Use automatic path detection** (no manual setup needed)
+   - Bot automatically tries `/data`, `/persist`, `/tmp`, then local
+   - Works out of the box
 
-2. **Add periodic backup** (Option 3 - local backup)
-   - Backup to same volume
+2. **Enable periodic backups** (safety net)
+   - Backup to same directory
    - Keep last 10 backups
-   - Safety net if database corrupts
+   - Protects against data loss
 
 **Implementation:**
 ```yaml
@@ -154,14 +156,18 @@ pnl_backup:
 pnl_backup:
   enabled: true
   interval_seconds: 3600  # Hourly backups
-  local_path: /data/backups
+  local_path: /tmp/backups  # Or /data/backups if volume exists
   max_backups: 10
 ```
 
-**Environment Variable:**
+**Environment Variable (Optional - auto-detects if not set):**
 ```
-PNL_DB_PATH=/data/pnl_trades.db
+PNL_DB_PATH=/tmp/pnl_trades.db
 ```
+
+**Or use external backup** (more reliable):
+- S3 backup (Option 3)
+- Webhook export (Option 4)
 
 ---
 
