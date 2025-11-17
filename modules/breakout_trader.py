@@ -291,6 +291,35 @@ class BreakoutTrader:
         except Exception as e:
             LOG.exception(f"[breakout] error recovering position: {e}")
 
+    async def _recover_candles(self) -> None:
+        """Load saved candles from database on startup."""
+        if not self.candle_tracker:
+            return
+        
+        try:
+            saved_candles = await self.candle_tracker.load_candles("breakout", self.market, limit=200)
+            if saved_candles:
+                # Convert to Candle objects
+                for c in saved_candles:
+                    candle = Candle(
+                        open_time=c["open_time"],
+                        open=c["open"],
+                        high=c["high"],
+                        low=c["low"],
+                        close=c["close"],
+                        volume=c["volume"],
+                    )
+                    self._candles.append(candle)
+                
+                LOG.warning(
+                    f"[breakout] ✅ RECOVERED {len(saved_candles)} CANDLES FROM DATABASE "
+                    f"(oldest: {saved_candles[0]['open_time']}, newest: {saved_candles[-1]['open_time']})"
+                )
+            else:
+                LOG.info("[breakout] No saved candles found in database, starting fresh")
+        except Exception as e:
+            LOG.exception(f"[breakout] error recovering candles: {e}")
+
     async def stop(self) -> None:
         """Stop the trader."""
         self._stop.set()
@@ -363,6 +392,20 @@ class BreakoutTrader:
                     self._candles.clear()
                     self._candles.extend(new_candles)
                     LOG.debug("[breakout] fetched %d candles", len(new_candles))
+                    # Save to database
+                    if self.candle_tracker:
+                        candle_dicts = [
+                            {
+                                "open_time": c.open_time,
+                                "open": c.open,
+                                "high": c.high,
+                                "low": c.low,
+                                "close": c.close,
+                                "volume": c.volume,
+                            }
+                            for c in new_candles
+                        ]
+                        await self.candle_tracker.save_candles("breakout", self.market, candle_dicts)
 
         except Exception as e:
             LOG.warning("[breakout] error fetching candles: %s", e)
