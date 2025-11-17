@@ -320,6 +320,7 @@ async def main():
             )
             breakout_trader.pnl_tracker = pnl_tracker  # Attach PnL tracker
             breakout_trader.position_tracker = position_tracker  # Attach position tracker
+            breakout_trader.candle_tracker = candle_tracker  # Attach candle tracker
             if breakout_api_cfg:
                 LOG.info(f"Breakout trader initialized with dedicated account {breakout_api_cfg.get('account_index')}")
             else:
