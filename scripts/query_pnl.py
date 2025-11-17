@@ -29,9 +29,9 @@ def parse_time_ago(time_str: str) -> Optional[float]:
     """Parse time strings like '24h', '7d', '30d' into Unix timestamp."""
     if not time_str:
         return None
-    
+
     time_str = time_str.lower().strip()
-    
+
     if time_str.endswith('h'):
         hours = int(time_str[:-1])
         return (datetime.now() - timedelta(hours=hours)).timestamp()
@@ -56,27 +56,27 @@ def format_stats(stats: dict) -> None:
     print("PnL Analysis")
     print("=" * 60)
     print()
-    
+
     print(f"Total Trades: {stats['total_trades']}")
     print(f"Win Rate: {stats['win_rate']:.1f}% ({stats['wins']} wins, {stats['losses']} losses)")
     print(f"Total PnL: {stats['total_pnl_pct']:.2f}%")
     print(f"Total PnL (USD): ${stats['total_pnl_usd']:.2f}")
     print(f"Avg PnL per Trade: {stats['avg_pnl_pct']:.2f}%")
-    
+
     if stats['avg_win_pct'] > 0:
         print(f"Avg Win: {stats['avg_win_pct']:.2f}%")
     if stats['avg_loss_pct'] < 0:
         print(f"Avg Loss: {stats['avg_loss_pct']:.2f}%")
-    
+
     if stats['avg_loss_pct'] != 0:
         rr_ratio = abs(stats['avg_win_pct'] / stats['avg_loss_pct'])
         print(f"R:R Ratio: {rr_ratio:.2f}")
-    
+
     if stats['best_trade_pct'] > 0:
         print(f"Best Trade: {stats['best_trade_pct']:.2f}%")
     if stats['worst_trade_pct'] < 0:
         print(f"Worst Trade: {stats['worst_trade_pct']:.2f}%")
-    
+
     print()
 
 
@@ -111,52 +111,52 @@ async def main():
         default=0,
         help="Show N most recent trades",
     )
-    
+
     args = parser.parse_args()
-    
+
     # Initialize tracker
     tracker = PnLTracker(db_path=args.db_path)
-    
+
     # Parse since_time
     since_time = parse_time_ago(args.since) if args.since else None
-    
+
     # Get stats
     stats = await tracker.get_stats(
         strategy=args.strategy,
         since_time=since_time,
     )
-    
+
     if args.export:
         # Export trades
         if args.strategy or since_time:
             # Need to query specific trades
             conn = sqlite3.connect(args.db_path)
             cursor = conn.cursor()
-            
+
             conditions = []
             params = []
-            
+
             if args.strategy:
                 conditions.append("strategy = ?")
                 params.append(args.strategy)
             if since_time:
                 conditions.append("exit_time >= ?")
                 params.append(since_time)
-            
+
             where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
-            
+
             cursor.execute(f"""
                 SELECT * FROM trades
                 {where_clause}
                 ORDER BY exit_time DESC
             """, params)
-            
+
             columns = [desc[0] for desc in cursor.execute("PRAGMA table_info(trades)").fetchall()]
             trades = [dict(zip(columns, row)) for row in cursor.fetchall()]
             conn.close()
         else:
             trades = await tracker.get_recent_trades(limit=10000)  # Get all
-        
+
         if args.export == "csv":
             output_path = args.output or "pnl_export.csv"
             with open(output_path, "w", newline="") as f:
@@ -186,7 +186,7 @@ async def main():
     else:
         # Show stats
         format_stats(stats)
-        
+
         # Show breakdown by strategy if not filtering
         if not args.strategy:
             print("=== BY STRATEGY ===")
@@ -195,25 +195,25 @@ async def main():
                 if strat_stats['total_trades'] > 0:
                     print(f"\n{strategy}:")
                     format_stats(strat_stats)
-        
+
         # Show breakdown by exit reason
         conn = sqlite3.connect(args.db_path)
         cursor = conn.cursor()
-        
+
         conditions = []
         params = []
-        
+
         if args.strategy:
             conditions.append("strategy = ?")
             params.append(args.strategy)
         if since_time:
             conditions.append("exit_time >= ?")
             params.append(since_time)
-        
+
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
-        
+
         cursor.execute(f"""
-            SELECT exit_reason, 
+            SELECT exit_reason,
                    COUNT(*) as count,
                    SUM(CASE WHEN pnl_pct > 0 THEN 1 ELSE 0 END) as wins,
                    SUM(pnl_pct) as total_pnl
@@ -222,15 +222,15 @@ async def main():
             GROUP BY exit_reason
             ORDER BY count DESC
         """, params)
-        
+
         print("=== BY EXIT REASON ===")
         for row in cursor.fetchall():
             reason, count, wins, total_pnl = row
             win_rate = (wins / count * 100) if count > 0 else 0
             print(f"{reason}: {count} trades, {win_rate:.1f}% win rate, {total_pnl:.2f}% total PnL")
-        
+
         conn.close()
-    
+
     tracker.close()
 
 

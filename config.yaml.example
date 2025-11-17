@@ -142,13 +142,13 @@ breakout:
 
 # PnL Database & Backup Configuration
 pnl_backup:
-  enabled: false  # Set to true to enable periodic backups
+  enabled: true  # Enable periodic backups (safety net)
   interval_seconds: 3600  # Backup interval (1 hour default)
-  
-  # Option 1: Local backup (to persistent volume)
+
+  # Option 1: Local backup (to persistent volume) - RECOMMENDED
   local_path: /data/backups  # Path to backup directory (must be on persistent volume)
   max_backups: 10  # Keep last N backups
-  
+
   # Option 2: S3 backup (uncomment to use)
   # s3:
   #   bucket: your-bucket-name
@@ -156,7 +156,7 @@ pnl_backup:
   #   endpoint_url: https://s3.amazonaws.com  # Or MinIO URL
   #   region: us-east-1
   #   # Credentials from env: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
-  
+
   # Option 3: Webhook backup (uncomment to use)
   # webhook_url: https://your-api.com/trades
 

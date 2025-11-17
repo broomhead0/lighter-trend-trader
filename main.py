@@ -162,10 +162,10 @@ async def main():
             os.makedirs("/data", exist_ok=True)
         else:
             pnl_db_path = "pnl_trades.db"
-    
+
     pnl_tracker = PnLTracker(db_path=pnl_db_path)
     LOG.info(f"PnL tracker initialized: {pnl_db_path} (database-backed for high volume)")
-    
+
     # Initialize backup if configured
     backup_config = cfg.get("pnl_backup") or {}
     if backup_config.get("enabled", False):
@@ -347,7 +347,7 @@ async def main():
             while not stop_event.is_set():
                 await pnl_backup.backup()
                 await asyncio.sleep(300)  # Check every 5 minutes
-    
+
     # Run traders and price feed in parallel
     tasks = [price_feed.run(), stop_event.wait()]
 
@@ -357,7 +357,7 @@ async def main():
         tasks.append(renko_ao_trader.run())
     if breakout_trader:
         tasks.append(breakout_trader.run())
-    
+
     if pnl_backup:
         tasks.append(backup_loop())
 
