@@ -24,7 +24,7 @@ print(f"Database file exists: {os.path.exists(db_path)}")
 try:
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
-    
+
     # Create test table if it doesn't exist
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS persistence_test (
@@ -34,38 +34,38 @@ try:
         )
     """)
     conn.commit()
-    
+
     # Write test data
     test_data = f"TEST_DATA_{int(time.time())}"
     cursor.execute("""
         INSERT INTO persistence_test (test_data, timestamp) VALUES (?, ?)
     """, (test_data, time.time()))
     conn.commit()
-    
+
     print(f"✅ Wrote test data: {test_data}")
-    
+
     # Verify it's there
     cursor.execute("SELECT COUNT(*) FROM persistence_test")
     count = cursor.fetchone()[0]
     print(f"✅ Total test records in database: {count}")
-    
+
     # Check other tables
     cursor.execute("SELECT COUNT(*) FROM trades")
     trades_count = cursor.fetchone()[0]
     print(f"✅ Total trades in database: {trades_count}")
-    
+
     cursor.execute("SELECT COUNT(*) FROM candles")
     candles_count = cursor.fetchone()[0]
     print(f"✅ Total candles in database: {candles_count}")
-    
+
     cursor.execute("SELECT COUNT(*) FROM renko_bricks")
     bricks_count = cursor.fetchone()[0]
     print(f"✅ Total Renko bricks in database: {bricks_count}")
-    
+
     cursor.execute("SELECT COUNT(*) FROM price_history")
     price_count = cursor.fetchone()[0]
     print(f"✅ Total price history points in database: {price_count}")
-    
+
     conn.close()
     print(f"\n✅ Database test completed successfully!")
     print(f"   Database path: {db_path}")
@@ -73,7 +73,7 @@ try:
     if os.path.exists(db_path):
         file_size = os.path.getsize(db_path)
         print(f"   File size: {file_size} bytes")
-    
+
 except Exception as e:
     print(f"❌ Error: {e}")
     import traceback

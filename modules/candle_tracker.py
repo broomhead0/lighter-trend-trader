@@ -64,7 +64,7 @@ class CandleTracker:
             db_dir = os.path.dirname(self.db_path)
             if db_dir:
                 os.makedirs(db_dir, exist_ok=True)
-            
+
             conn = sqlite3.connect(self.db_path, check_same_thread=False)
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
@@ -93,11 +93,11 @@ class CandleTracker:
 
             conn.commit()
             self._conn = conn
-            
+
             # Verify database is writable
             test_cursor = conn.execute("SELECT COUNT(*) FROM candles")
             test_cursor.fetchone()
-            
+
             LOG.info(f"[candle_tracker] ✅ Database initialized and verified: {self.db_path}")
         except Exception as e:
             LOG.exception(f"[candle_tracker] ❌ CRITICAL: Failed to initialize database at {self.db_path}: {e}")
@@ -118,7 +118,7 @@ class CandleTracker:
                 if not os.path.exists(self.db_path):
                     LOG.error(f"[candle_tracker] ❌ Database file does not exist: {self.db_path}")
                     return
-                
+
                 now = time.time()
 
                 # Use INSERT OR REPLACE to handle updates
@@ -140,14 +140,14 @@ class CandleTracker:
                     ))
 
                 self._conn.commit()
-                
+
                 # Verify the write succeeded
                 verify_cursor = self._conn.execute(
                     "SELECT COUNT(*) FROM candles WHERE strategy = ? AND market = ?",
                     (strategy, market)
                 )
                 count = verify_cursor.fetchone()[0]
-                
+
                 LOG.info(f"[candle_tracker] ✅ Saved {len(candles)} candles for {strategy} {market} (total in DB: {count})")
             except Exception as e:
                 LOG.exception(f"[candle_tracker] ❌ Error saving candles: {e}")

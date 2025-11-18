@@ -163,8 +163,21 @@ async def main():
         # Ensure directory exists
         db_dir = os.path.dirname(pnl_db_path)
         if db_dir:
-            os.makedirs(db_dir, exist_ok=True)
-        LOG.info(f"Using PNL_DB_PATH from environment: {pnl_db_path}")
+            try:
+                os.makedirs(db_dir, exist_ok=True)
+                # Verify directory is writable
+                test_file = os.path.join(db_dir, ".test_write")
+                with open(test_file, "w") as f:
+                    f.write("test")
+                os.remove(test_file)
+                LOG.warning(f"✅ Using PNL_DB_PATH from environment: {pnl_db_path} (directory exists and is writable)")
+            except Exception as e:
+                LOG.error(f"❌ CRITICAL: Cannot write to {db_dir}: {e}")
+                LOG.error(f"❌ Falling back to /tmp (NOT PERSISTENT)")
+                pnl_db_path = "/tmp/pnl_trades.db"
+                os.makedirs("/tmp", exist_ok=True)
+        else:
+            LOG.warning(f"Using PNL_DB_PATH from environment: {pnl_db_path}")
     else:
         # Try multiple persistent locations
         # Railway volumes might be at /data, /persist (these are persistent)
@@ -189,7 +202,7 @@ async def main():
     if os.path.exists(pnl_db_path):
         file_size = os.path.getsize(pnl_db_path)
         LOG.warning(f"🔍 Database file size: {file_size} bytes")
-    
+
     pnl_tracker = PnLTracker(db_path=pnl_db_path)
     LOG.info(f"PnL tracker initialized: {pnl_db_path} (database-backed for high volume)")
 

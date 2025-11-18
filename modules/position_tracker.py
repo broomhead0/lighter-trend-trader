@@ -71,7 +71,7 @@ class PositionTracker:
             db_dir = os.path.dirname(self.db_path)
             if db_dir:
                 os.makedirs(db_dir, exist_ok=True)
-            
+
             conn = sqlite3.connect(self.db_path, check_same_thread=False)
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
@@ -104,11 +104,11 @@ class PositionTracker:
 
             conn.commit()
             self._conn = conn
-            
+
             # Verify database is writable
             test_cursor = conn.execute("SELECT COUNT(*) FROM positions")
             test_cursor.fetchone()
-            
+
             LOG.info(f"[position_tracker] ✅ Database initialized and verified: {self.db_path}")
         except Exception as e:
             LOG.exception(f"[position_tracker] ❌ CRITICAL: Failed to initialize database at {self.db_path}: {e}")

@@ -66,7 +66,7 @@ class PnLTracker:
             db_dir = os.path.dirname(self.db_path)
             if db_dir:
                 os.makedirs(db_dir, exist_ok=True)
-            
+
             conn = sqlite3.connect(self.db_path, check_same_thread=False)
             conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for better concurrency
             conn.execute("PRAGMA synchronous=NORMAL")  # Balance between safety and speed
@@ -99,11 +99,11 @@ class PnLTracker:
 
             conn.commit()
             self._conn = conn
-            
+
             # Verify database is writable
             test_cursor = conn.execute("SELECT COUNT(*) FROM trades")
             test_cursor.fetchone()
-            
+
             LOG.info(f"[pnl_tracker] ✅ Database initialized and verified: {self.db_path}")
         except Exception as e:
             LOG.exception(f"[pnl_tracker] ❌ CRITICAL: Failed to initialize database at {self.db_path}: {e}")
@@ -126,7 +126,7 @@ class PnLTracker:
         if not self._conn:
             LOG.error(f"[pnl_tracker] ❌ Cannot record trade: database connection is None (db_path={self.db_path})")
             raise RuntimeError("Database connection not initialized")
-        
+
         # Calculate approximate USD PnL
         # For SOL, use exit_price as approximation (could be improved with actual USD conversion)
         pnl_usd = (pnl_pct / 100.0) * exit_price * size
@@ -137,7 +137,7 @@ class PnLTracker:
                 if not os.path.exists(self.db_path):
                     LOG.error(f"[pnl_tracker] ❌ Database file does not exist: {self.db_path}")
                     raise FileNotFoundError(f"Database file not found: {self.db_path}")
-                
+
                 self._conn.execute("""
                     INSERT INTO trades (
                         strategy, side, entry_price, exit_price, size,
@@ -150,14 +150,14 @@ class PnLTracker:
                     exit_reason, market, time.time()
                 ))
                 self._conn.commit()
-                
+
                 # Verify the write succeeded
                 verify_cursor = self._conn.execute("SELECT COUNT(*) FROM trades WHERE strategy = ? AND exit_time = ?", (strategy, exit_time))
                 count = verify_cursor.fetchone()[0]
                 if count == 0:
                     LOG.error(f"[pnl_tracker] ❌ Trade was not saved! Verification query returned 0 rows")
                     raise RuntimeError("Trade write verification failed")
-                
+
                 LOG.info(f"[pnl_tracker] ✅ Recorded trade: {strategy} {side} {pnl_pct:.2f}% (entry={entry_price:.2f}, exit={exit_price:.2f}, size={size:.4f}) - VERIFIED in DB")
             except Exception as e:
                 LOG.exception(f"[pnl_tracker] ❌ Error recording trade: {e}")

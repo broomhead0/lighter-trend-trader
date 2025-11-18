@@ -52,7 +52,7 @@ class RenkoTracker:
             db_dir = os.path.dirname(self.db_path)
             if db_dir:
                 os.makedirs(db_dir, exist_ok=True)
-            
+
             conn = sqlite3.connect(self.db_path, check_same_thread=False)
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
@@ -94,11 +94,11 @@ class RenkoTracker:
 
             conn.commit()
             self._conn = conn
-            
+
             # Verify database is writable
             test_cursor = conn.execute("SELECT COUNT(*) FROM renko_bricks")
             test_cursor.fetchone()
-            
+
             LOG.info(f"[renko_tracker] ✅ Database initialized and verified: {self.db_path}")
         except Exception as e:
             LOG.exception(f"[renko_tracker] ❌ CRITICAL: Failed to initialize database at {self.db_path}: {e}")
@@ -115,7 +115,7 @@ class RenkoTracker:
                 if not os.path.exists(self.db_path):
                     LOG.error(f"[renko_tracker] ❌ Database file does not exist: {self.db_path}")
                     return
-                
+
                 now = time.time()
 
                 # Use INSERT OR REPLACE to handle updates
@@ -137,14 +137,14 @@ class RenkoTracker:
                     ))
 
                 self._conn.commit()
-                
+
                 # Verify the write succeeded
                 verify_cursor = self._conn.execute(
                     "SELECT COUNT(*) FROM renko_bricks WHERE strategy = ? AND market = ?",
                     (strategy, market)
                 )
                 count = verify_cursor.fetchone()[0]
-                
+
                 LOG.debug(f"[renko_tracker] ✅ Saved {len(bricks)} bricks for {strategy} {market} (total in DB: {count})")
             except Exception as e:
                 LOG.exception(f"[renko_tracker] ❌ Error saving bricks: {e}")
@@ -200,7 +200,7 @@ class RenkoTracker:
                 if not os.path.exists(self.db_path):
                     LOG.error(f"[renko_tracker] ❌ Database file does not exist: {self.db_path}")
                     return
-                
+
                 now = time.time()
                 if timestamps is None:
                     timestamps = [now - (len(prices) - i) for i in range(len(prices))]
@@ -216,14 +216,14 @@ class RenkoTracker:
                     """, (strategy, market, price, ts, now))
 
                 self._conn.commit()
-                
+
                 # Verify the write succeeded
                 verify_cursor = self._conn.execute(
                     "SELECT COUNT(*) FROM price_history WHERE strategy = ? AND market = ?",
                     (strategy, market)
                 )
                 count = verify_cursor.fetchone()[0]
-                
+
                 LOG.debug(f"[renko_tracker] ✅ Saved {len(prices)} price points for {strategy} {market} (total in DB: {count})")
             except Exception as e:
                 LOG.exception(f"[renko_tracker] ❌ Error saving price history: {e}")
