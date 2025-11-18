@@ -240,6 +240,52 @@ async def main():
         pnl_backup = None
         LOG.info("PnL backup disabled (set pnl_backup.enabled=true in config to enable)")
 
+    # Analyze database size BEFORE cleanup
+    try:
+        from modules.db_cleanup import analyze_database_size
+        LOG.warning("=" * 80)
+        LOG.warning("DATABASE SIZE ANALYSIS (BEFORE CLEANUP)")
+        LOG.warning("=" * 80)
+        analysis = analyze_database_size(pnl_db_path)
+        
+        total_db_size = analysis["db_file_size"] + analysis["wal_file_size"] + analysis["shm_file_size"]
+        LOG.warning(f"Database files: {total_db_size:,} bytes ({total_db_size / 1024 / 1024:.2f} MB)")
+        LOG.warning(f"  Main DB: {analysis['db_file_size']:,} bytes ({analysis['db_file_size'] / 1024 / 1024:.2f} MB)")
+        if analysis["wal_file_size"] > 0:
+            LOG.warning(f"  WAL: {analysis['wal_file_size']:,} bytes ({analysis['wal_file_size'] / 1024 / 1024:.2f} MB)")
+        if analysis["shm_file_size"] > 0:
+            LOG.warning(f"  SHM: {analysis['shm_file_size']:,} bytes ({analysis['shm_file_size'] / 1024 / 1024:.2f} MB)")
+        
+        if analysis["backup_count"] > 0:
+            LOG.warning(f"Backup files: {analysis['backup_dir_size']:,} bytes ({analysis['backup_dir_size'] / 1024 / 1024:.2f} MB) in {analysis['backup_count']} files")
+        
+        LOG.warning(f"Total accounted: {(total_db_size + analysis['backup_dir_size']):,} bytes ({(total_db_size + analysis['backup_dir_size']) / 1024 / 1024:.2f} MB)")
+        LOG.warning(f"Railway reports: 67 MB")
+        LOG.warning(f"Unaccounted: {(67 * 1024 * 1024) - (total_db_size + analysis['backup_dir_size']):,} bytes ({(67 * 1024 * 1024 - total_db_size - analysis['backup_dir_size']) / 1024 / 1024:.2f} MB)")
+        LOG.warning("")
+        
+        LOG.warning("Table row counts:")
+        for table, count in analysis["table_counts"].items():
+            LOG.warning(f"  {table:20} {count:>10,} rows")
+        
+        if "price_history_by_strategy" in analysis:
+            LOG.warning("")
+            LOG.warning("Price history breakdown (⚠️  Main space consumer):")
+            for key, count in analysis["price_history_by_strategy"].items():
+                size_est = count * 50
+                LOG.warning(f"  {key:30} {count:>10,} prices  ~{size_est / 1024 / 1024:.2f} MB")
+        
+        if "candles_by_strategy" in analysis:
+            LOG.warning("")
+            LOG.warning("Candles breakdown:")
+            for key, count in analysis["candles_by_strategy"].items():
+                size_est = count * 100
+                LOG.warning(f"  {key:30} {count:>10,} candles  ~{size_est / 1024 / 1024:.2f} MB")
+        
+        LOG.warning("=" * 80)
+    except Exception as e:
+        LOG.warning(f"[db_analysis] Analysis failed: {e}")
+
     # Run database cleanup on startup (clean old data, checkpoint WAL)
     try:
         from modules.db_cleanup import cleanup_old_data
