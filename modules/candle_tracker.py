@@ -108,17 +108,22 @@ class CandleTracker:
         if not candles:
             return
 
+        if not self._conn:
+            LOG.error(f"[candle_tracker] ❌ Cannot save candles: database connection is None (db_path={self.db_path})")
+            return
+
         async with self._lock:
             try:
-                conn = self._conn
-                if not conn:
+                # Verify database file exists
+                if not os.path.exists(self.db_path):
+                    LOG.error(f"[candle_tracker] ❌ Database file does not exist: {self.db_path}")
                     return
-
+                
                 now = time.time()
 
                 # Use INSERT OR REPLACE to handle updates
                 for candle in candles:
-                    conn.execute("""
+                    self._conn.execute("""
                         INSERT OR REPLACE INTO candles (
                             strategy, market, open_time, open, high, low, close, volume, created_at
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -134,10 +139,20 @@ class CandleTracker:
                         now,
                     ))
 
-                conn.commit()
-                LOG.info(f"[candle_tracker] ✅ Saved {len(candles)} candles for {strategy} {market}")
+                self._conn.commit()
+                
+                # Verify the write succeeded
+                verify_cursor = self._conn.execute(
+                    "SELECT COUNT(*) FROM candles WHERE strategy = ? AND market = ?",
+                    (strategy, market)
+                )
+                count = verify_cursor.fetchone()[0]
+                
+                LOG.info(f"[candle_tracker] ✅ Saved {len(candles)} candles for {strategy} {market} (total in DB: {count})")
             except Exception as e:
-                LOG.exception(f"[candle_tracker] Error saving candles: {e}")
+                LOG.exception(f"[candle_tracker] ❌ Error saving candles: {e}")
+                if self._conn:
+                    self._conn.rollback()
 
     async def load_candles(self, strategy: str, market: str, limit: int = 200) -> List[Dict[str, Any]]:
         """Load candles for a strategy, sorted by open_time."""

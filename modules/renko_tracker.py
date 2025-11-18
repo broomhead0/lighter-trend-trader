@@ -179,12 +179,17 @@ class RenkoTracker:
         if not prices:
             return
 
+        if not self._conn:
+            LOG.error(f"[renko_tracker] ❌ Cannot save price history: database connection is None (db_path={self.db_path})")
+            return
+
         async with self._lock:
             try:
-                conn = self._conn
-                if not conn:
+                # Verify database file exists
+                if not os.path.exists(self.db_path):
+                    LOG.error(f"[renko_tracker] ❌ Database file does not exist: {self.db_path}")
                     return
-
+                
                 now = time.time()
                 if timestamps is None:
                     timestamps = [now - (len(prices) - i) for i in range(len(prices))]
