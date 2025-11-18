@@ -730,7 +730,9 @@ class BreakoutTrader:
         recent_widths = []
         for i in range(5):
             if len(candles) >= self.bb_period + i:
-                _, upper, lower = self._compute_bollinger_bands(candles[:-(i or None) or len(candles)], self.bb_period, self.bb_std)
+                # Fix: Handle None case properly - use len(candles) - i if i > 0, else len(candles)
+                slice_end = len(candles) - i if i > 0 else len(candles)
+                _, upper, lower = self._compute_bollinger_bands(candles[:slice_end], self.bb_period, self.bb_std)
                 middle = (upper + lower) / 2.0
                 width = (upper - lower) / middle if middle > 0 else 0.0
                 recent_widths.append(width)
