@@ -182,6 +182,14 @@ async def main():
             os.makedirs("/tmp", exist_ok=True)
             LOG.warning("⚠️ WARNING: Using /tmp for database (NOT PERSISTENT on Railway). Set PNL_DB_PATH env var or mount a volume at /data or /persist")
 
+    # CRITICAL: Log database path and verify it exists
+    LOG.warning(f"🔍 DATABASE PATH: {pnl_db_path}")
+    LOG.warning(f"🔍 Database directory exists: {os.path.exists(os.path.dirname(pnl_db_path))}")
+    LOG.warning(f"🔍 Database file exists: {os.path.exists(pnl_db_path)}")
+    if os.path.exists(pnl_db_path):
+        file_size = os.path.getsize(pnl_db_path)
+        LOG.warning(f"🔍 Database file size: {file_size} bytes")
+    
     pnl_tracker = PnLTracker(db_path=pnl_db_path)
     LOG.info(f"PnL tracker initialized: {pnl_db_path} (database-backed for high volume)")
 
