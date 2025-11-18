@@ -195,19 +195,29 @@ class RenkoTracker:
                     timestamps = [now - (len(prices) - i) for i in range(len(prices))]
 
                 # Clear old history and save new (keep last 1000)
-                conn.execute("DELETE FROM price_history WHERE strategy = ? AND market = ?", (strategy, market))
+                self._conn.execute("DELETE FROM price_history WHERE strategy = ? AND market = ?", (strategy, market))
 
                 for price, ts in zip(prices[-1000:], timestamps[-1000:]):  # Keep last 1000
-                    conn.execute("""
+                    self._conn.execute("""
                         INSERT INTO price_history (
                             strategy, market, price, timestamp, created_at
                         ) VALUES (?, ?, ?, ?, ?)
                     """, (strategy, market, price, ts, now))
 
-                conn.commit()
-                LOG.debug(f"[renko_tracker] Saved {len(prices)} price points for {strategy} {market}")
+                self._conn.commit()
+                
+                # Verify the write succeeded
+                verify_cursor = self._conn.execute(
+                    "SELECT COUNT(*) FROM price_history WHERE strategy = ? AND market = ?",
+                    (strategy, market)
+                )
+                count = verify_cursor.fetchone()[0]
+                
+                LOG.debug(f"[renko_tracker] ✅ Saved {len(prices)} price points for {strategy} {market} (total in DB: {count})")
             except Exception as e:
-                LOG.exception(f"[renko_tracker] Error saving price history: {e}")
+                LOG.exception(f"[renko_tracker] ❌ Error saving price history: {e}")
+                if self._conn:
+                    self._conn.rollback()
 
     async def load_price_history(self, strategy: str, market: str, limit: int = 1000) -> List[float]:
         """Load price history for a strategy, sorted by timestamp."""
