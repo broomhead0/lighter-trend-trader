@@ -39,7 +39,7 @@ if os.path.exists(data_dir):
                 print(f"  {rel_path:60} {size:>12,} bytes ({size / 1024 / 1024:>6.2f} MB)")
             except Exception as e:
                 print(f"  {rel_path:60} ERROR: {e}")
-    
+
     print()
     print(f"Total files size: {total_size:,} bytes ({total_size / 1024 / 1024:.2f} MB)")
 else:
@@ -79,16 +79,16 @@ if os.path.exists(db_path):
     try:
         conn = sqlite3.connect(db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
-        
+
         tables = ["trades", "candles", "renko_bricks", "price_history", "positions"]
-        
+
         total_rows = 0
         for table in tables:
             try:
                 cursor = conn.execute(f"SELECT COUNT(*) as count FROM {table}")
                 count = cursor.fetchone()["count"]
                 total_rows += count
-                
+
                 # Estimate size (rough)
                 if table == "trades":
                     est_size = count * 200  # ~200 bytes per trade
@@ -100,17 +100,17 @@ if os.path.exists(db_path):
                     est_size = count * 50  # ~50 bytes per price
                 else:
                     est_size = count * 100
-                
+
                 print(f"  {table:20} {count:>10,} rows  ~{est_size / 1024 / 1024:>6.2f} MB")
             except sqlite3.OperationalError:
                 print(f"  {table:20} {'N/A':>10} (table doesn't exist)")
-        
+
         print(f"  {'TOTAL ROWS':20} {total_rows:>10,}")
         print()
-        
+
         # Detailed breakdown by strategy
         print("  Detailed breakdown:")
-        
+
         # Price history (likely the biggest)
         try:
             cursor = conn.execute("""
@@ -128,7 +128,7 @@ if os.path.exists(db_path):
                     print(f"      {row['strategy']:20} {row['market']:10} {count:>10,} prices  ~{size_est / 1024 / 1024:>6.2f} MB")
         except:
             pass
-        
+
         # Candles
         try:
             cursor = conn.execute("""
@@ -146,7 +146,7 @@ if os.path.exists(db_path):
                     print(f"      {row['strategy']:20} {row['market']:10} {count:>10,} candles  ~{size_est / 1024 / 1024:>6.2f} MB")
         except:
             pass
-        
+
         # Bricks
         try:
             cursor = conn.execute("""
@@ -164,7 +164,7 @@ if os.path.exists(db_path):
                     print(f"      {row['strategy']:20} {row['market']:10} {count:>10,} bricks  ~{size_est / 1024 / 1024:>6.2f} MB")
         except:
             pass
-        
+
         # Trades
         try:
             cursor = conn.execute("""
@@ -182,7 +182,7 @@ if os.path.exists(db_path):
                     print(f"      {row['strategy']:20} {count:>10,} trades  ~{size_est / 1024 / 1024:>6.2f} MB")
         except:
             pass
-        
+
         conn.close()
     except Exception as e:
         print(f"  ❌ Error analyzing database: {e}")
@@ -208,7 +208,7 @@ if os.path.exists(backup_dir):
             size = os.path.getsize(file_path)
             backup_total += size
             backup_files.append((file, size))
-    
+
     if backup_files:
         backup_files.sort(key=lambda x: x[1], reverse=True)
         print(f"  Found {len(backup_files)} backup files:")

@@ -17,12 +17,12 @@ LOG = logging.getLogger("db_cleanup")
 def analyze_database_size(db_path: str) -> dict:
     """
     Analyze database size and contents.
-    
+
     Returns:
         dict with detailed size breakdown
     """
     import os
-    
+
     analysis = {
         "db_file_size": 0,
         "wal_file_size": 0,
@@ -33,20 +33,20 @@ def analyze_database_size(db_path: str) -> dict:
         "total_rows": 0,
         "errors": []
     }
-    
+
     try:
         # File sizes
         if os.path.exists(db_path):
             analysis["db_file_size"] = os.path.getsize(db_path)
-        
+
         wal_path = db_path + "-wal"
         if os.path.exists(wal_path):
             analysis["wal_file_size"] = os.path.getsize(wal_path)
-        
+
         shm_path = db_path + "-shm"
         if os.path.exists(shm_path):
             analysis["shm_file_size"] = os.path.getsize(shm_path)
-        
+
         # Backup directory
         backup_dir = os.path.join(os.path.dirname(db_path), "backups")
         if os.path.exists(backup_dir):
@@ -55,10 +55,29 @@ def analyze_database_size(db_path: str) -> dict:
             for f in backup_files:
                 analysis["backup_dir_size"] += os.path.getsize(os.path.join(backup_dir, f))
         
+        # List ALL files on the volume
+        data_dir = os.path.dirname(db_path) if os.path.dirname(db_path) else "/data"
+        analysis["all_files"] = []
+        if os.path.exists(data_dir):
+            for root, dirs, files in os.walk(data_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    try:
+                        size = os.path.getsize(file_path)
+                        rel_path = os.path.relpath(file_path, data_dir)
+                        analysis["all_files"].append({
+                            "path": rel_path,
+                            "size": size
+                        })
+                    except Exception:
+                        pass
+            # Sort by size descending
+            analysis["all_files"].sort(key=lambda x: x["size"], reverse=True)
+
         # Database contents
         conn = sqlite3.connect(db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
-        
+
         tables = ["trades", "candles", "renko_bricks", "price_history", "positions"]
         for table in tables:
             try:
@@ -68,7 +87,7 @@ def analyze_database_size(db_path: str) -> dict:
                 analysis["total_rows"] += count
             except sqlite3.OperationalError:
                 analysis["table_counts"][table] = 0
-        
+
         # Detailed breakdown for price_history (likely culprit)
         if "price_history" in analysis["table_counts"] and analysis["table_counts"]["price_history"] > 0:
             cursor = conn.execute("""
@@ -77,7 +96,7 @@ def analyze_database_size(db_path: str) -> dict:
                 GROUP BY strategy, market
             """)
             analysis["price_history_by_strategy"] = {f"{row['strategy']}/{row['market']}": row["count"] for row in cursor.fetchall()}
-        
+
         # Detailed breakdown for candles
         if "candles" in analysis["table_counts"] and analysis["table_counts"]["candles"] > 0:
             cursor = conn.execute("""
@@ -86,12 +105,12 @@ def analyze_database_size(db_path: str) -> dict:
                 GROUP BY strategy, market
             """)
             analysis["candles_by_strategy"] = {f"{row['strategy']}/{row['market']}": row["count"] for row in cursor.fetchall()}
-        
+
         conn.close()
-        
+
     except Exception as e:
         analysis["errors"].append(str(e))
-    
+
     return analysis
 
 
