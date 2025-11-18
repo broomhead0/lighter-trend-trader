@@ -225,7 +225,7 @@ class RenkoAOTrader:
 
                 # Update Renko bricks
                 if self._current_renko_brick_size:
-                    self._update_renko(current_price)
+                    await self._update_renko(current_price)
 
                 # Need enough bricks for indicators
                 needed_bricks = max(self.bb_period, self.ao_slow_period, self.renko_lookback)
