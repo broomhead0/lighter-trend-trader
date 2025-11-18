@@ -45,7 +45,7 @@ try:
     # Ensure directory exists
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
-    
+
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL")
     print(f"✅ Connected to database: {db_path}")

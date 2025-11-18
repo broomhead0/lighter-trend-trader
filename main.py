@@ -240,6 +240,23 @@ async def main():
         pnl_backup = None
         LOG.info("PnL backup disabled (set pnl_backup.enabled=true in config to enable)")
 
+    # Run database cleanup on startup (clean old data, checkpoint WAL)
+    try:
+        from modules.db_cleanup import cleanup_old_data
+        LOG.info("Running database cleanup...")
+        cleanup_stats = cleanup_old_data(pnl_db_path, dry_run=False)
+        if cleanup_stats["price_history_deleted"] > 0 or cleanup_stats["candles_deleted"] > 0:
+            LOG.warning(f"[db_cleanup] Cleaned up: {cleanup_stats['price_history_deleted']} price points, {cleanup_stats['candles_deleted']} candles")
+        if cleanup_stats["wal_checkpointed"]:
+            LOG.info("[db_cleanup] WAL file checkpointed (reduced size)")
+        if cleanup_stats["vacuumed"]:
+            LOG.info("[db_cleanup] Database vacuumed (reclaimed space)")
+        if cleanup_stats["errors"]:
+            for error in cleanup_stats["errors"]:
+                LOG.warning(f"[db_cleanup] Error: {error}")
+    except Exception as e:
+        LOG.warning(f"[db_cleanup] Cleanup failed (non-critical): {e}")
+
     # Helper function to create trading client from config
     def create_trading_client(strategy_api_cfg: Optional[Dict[str, Any]] = None) -> Optional[TradingClient]:
         """Create a TradingClient from config, with per-strategy overrides."""

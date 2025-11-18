@@ -46,11 +46,11 @@ print()
 try:
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
-    
+
     print("=" * 80)
     print("DATABASE CONTENTS")
     print("=" * 80)
-    
+
     # Get counts
     tables = ["trades", "candles", "renko_bricks", "price_history", "positions"]
     for table in tables:
@@ -60,9 +60,9 @@ try:
             print(f"  {table}: {count} records")
         except sqlite3.OperationalError as e:
             print(f"  {table}: Table does not exist ({e})")
-    
+
     print()
-    
+
     # Get recent trades
     try:
         cursor = conn.execute("""
@@ -82,9 +82,9 @@ try:
             print("No trades found")
     except sqlite3.OperationalError as e:
         print(f"Could not query trades: {e}")
-    
+
     print()
-    
+
     # Get candle counts by strategy
     try:
         cursor = conn.execute("""
@@ -102,9 +102,9 @@ try:
             print("No candles found")
     except sqlite3.OperationalError as e:
         print(f"Could not query candles: {e}")
-    
+
     print()
-    
+
     # Get brick counts by strategy
     try:
         cursor = conn.execute("""
@@ -122,9 +122,9 @@ try:
             print("No bricks found")
     except sqlite3.OperationalError as e:
         print(f"Could not query bricks: {e}")
-    
+
     print()
-    
+
     # Get open positions
     try:
         cursor = conn.execute("""
@@ -142,14 +142,14 @@ try:
             print("No open positions")
     except sqlite3.OperationalError as e:
         print(f"Could not query positions: {e}")
-    
+
     conn.close()
-    
+
     print()
     print("=" * 80)
     print("✅ Database query complete")
     print("=" * 80)
-    
+
 except Exception as e:
     print(f"❌ Error querying database: {e}")
     import traceback
