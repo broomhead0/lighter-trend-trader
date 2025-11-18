@@ -859,5 +859,45 @@ Build a system that **keeps learning until we achieve profitability** through au
 
 ---
 
+---
+
+## Future TODOs
+
+### Fee Analysis and Strategy Profitability (PRIORITY: Medium)
+
+**Status:** 📋 Planned, not yet implemented
+
+**Goal:** Ensure all strategies are profitable after accounting for trading fees.
+
+**Context:**
+- According to [Lighter.xyz account types documentation](https://docs.lighter.xyz/perpetual-futures/account-types):
+  - **Standard Account (Default)**: 0 maker / 0 taker fees, 300ms taker latency, 200ms maker/cancel latency
+  - **Premium Account (Opt-in)**: 0.002% Maker, 0.02% Taker fees, 0ms maker/cancel latency, 150ms taker latency
+
+**Current Situation:**
+- Strategies are currently optimized for gross PnL (before fees)
+- Need to verify profitability after fees are included
+- Standard account has 0 fees, but should verify we're using standard account
+- If using premium account, need to account for 0.002% maker / 0.02% taker fees
+
+**Tasks:**
+1. Verify which account type is being used (standard vs premium)
+2. Calculate actual fees per trade based on account type
+3. Update PnL calculations to include fees in profit/loss calculations
+4. Adjust take profit/stop loss thresholds if needed to account for fees
+5. Verify all strategies remain profitable after fees
+6. Update entry/exit logic if fees make some trades unprofitable
+
+**Impact:**
+- Critical for ensuring strategies are actually profitable in production
+- May need to adjust TP/SL thresholds if fees are significant
+- May need to filter out trades with too small expected profit (below fee threshold)
+
+**Reference:**
+- [Lighter.xyz Account Types](https://docs.lighter.xyz/perpetual-futures/account-types)
+- [Lighter.xyz Fees Documentation](https://docs.lighter.xyz/perpetual-futures/fees)
+
+---
+
 **Remember:** When context is lost, read this file first to understand the project structure, strategies, and current state.
 
