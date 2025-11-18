@@ -603,18 +603,18 @@ class RenkoAOTrader:
         if indicators.divergence_type is None:
             return None
 
-        # Filter 1: Divergence strength (relaxed for data collection)
+        # Filter 1: Divergence strength (stricter - will relax if needed)
         if indicators.divergence_strength < self.min_divergence_strength:
             LOG.debug(f"[renko_ao] divergence strength {indicators.divergence_strength:.2f} < {self.min_divergence_strength:.2f}")
             return None
 
-        # Filter 2: AO strength (relaxed for data collection)
+        # Filter 2: AO strength (stricter - will relax if needed)
         ao_abs = abs(indicators.ao)
         if ao_abs < self.min_ao_strength:
             LOG.debug(f"[renko_ao] AO strength {ao_abs:.2f} < {self.min_ao_strength:.2f}")
             return None
 
-        # Filter 3: ATR range (relaxed for data collection)
+        # Filter 3: ATR range (stricter - will relax if needed)
         if self._current_renko_brick_size and price > 0:
             atr_bps = (self._current_renko_brick_size / price) * 10000
             if atr_bps < self.optimal_atr_min_bps or atr_bps > self.optimal_atr_max_bps:
@@ -636,7 +636,7 @@ class RenkoAOTrader:
         # Note: BB enhancement is optional (not required) - we'll track it in analytics
         # This allows more trades while still preferring BB-enhanced setups
 
-        # Filter 5: Bricks since divergence (relaxed for data collection)
+        # Filter 5: Bricks since divergence (stricter - will relax if needed)
         divergence_key = indicators.divergence_type
         if divergence_key not in self._divergence_start_brick:
             self._divergence_start_brick[divergence_key] = len(self._renko_bricks)
