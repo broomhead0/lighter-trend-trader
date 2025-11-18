@@ -54,7 +54,7 @@ def analyze_database_size(db_path: str) -> dict:
             analysis["backup_count"] = len(backup_files)
             for f in backup_files:
                 analysis["backup_dir_size"] += os.path.getsize(os.path.join(backup_dir, f))
-        
+
         # List ALL files on the volume
         data_dir = os.path.dirname(db_path) if os.path.dirname(db_path) else "/data"
         analysis["all_files"] = []

@@ -281,7 +281,7 @@ async def main():
             for key, count in analysis["candles_by_strategy"].items():
                 size_est = count * 100
                 LOG.warning(f"  {key:30} {count:>10,} candles  ~{size_est / 1024 / 1024:.2f} MB")
-        
+
         # List ALL files on volume
         if "all_files" in analysis and analysis["all_files"]:
             LOG.warning("")
