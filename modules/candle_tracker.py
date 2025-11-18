@@ -137,7 +137,7 @@ class CandleTracker:
                 """, (strategy, market))
                 count = debug_cursor.fetchone()[0]
                 LOG.info(f"[candle_tracker] DEBUG: Found {count} candles in DB for {strategy} {market} (db_path={self.db_path})")
-                
+
                 # Also check all strategies/markets
                 all_cursor = conn.execute("SELECT strategy, market, COUNT(*) FROM candles GROUP BY strategy, market")
                 all_counts = all_cursor.fetchall()
