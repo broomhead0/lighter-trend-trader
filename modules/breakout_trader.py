@@ -197,7 +197,7 @@ class BreakoutTrader:
 
         # Load saved candles from database (recover from deploy)
         await self._recover_candles()
-        
+
         # Only fetch candles if we don't have any (to avoid clearing recovered candles)
         # If we have recovered candles, we'll build new ones from price updates
         if not self._candles:

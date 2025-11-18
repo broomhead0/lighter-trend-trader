@@ -119,13 +119,13 @@ class RenkoAOTrader:
         self.bb_period = int(trader_cfg.get("bb_period", 20))
         self.bb_std = float(trader_cfg.get("bb_std", 2.0))
 
-        # Entry filters (ULTRA-SELECTIVE - quality over quantity)
-        self.bb_enhancement_threshold = float(trader_cfg.get("bb_enhancement_threshold", 0.1))  # ULTRA-SELECTIVE: BB <0.2 or >0.8 - extreme positions only
-        self.min_divergence_strength = float(trader_cfg.get("min_divergence_strength", 0.08))  # Balanced selectivity: Divergence >0.08
-        self.min_ao_strength = float(trader_cfg.get("min_ao_strength", 0.15))  # ULTRA-SELECTIVE: AO >0.15 or <-0.15 - strong momentum
-        self.min_bricks_since_divergence = int(trader_cfg.get("min_bricks_since_divergence", 4))  # Balanced: At least 4 bricks since divergence started
-        self.optimal_atr_min_bps = float(trader_cfg.get("optimal_atr_min_bps", 3.0))  # ULTRA-SELECTIVE: ATR 3-8 bps
-        self.optimal_atr_max_bps = float(trader_cfg.get("optimal_atr_max_bps", 8.0))
+        # Entry filters (relaxed for data collection - will tighten based on results)
+        self.bb_enhancement_threshold = float(trader_cfg.get("bb_enhancement_threshold", 0.4))  # Relaxed: BB <0.4 or >0.6 for data collection
+        self.min_divergence_strength = float(trader_cfg.get("min_divergence_strength", 0.05))  # Relaxed: Divergence >0.05 for data collection
+        self.min_ao_strength = float(trader_cfg.get("min_ao_strength", 0.10))  # Relaxed: AO >0.10 or <-0.10 for data collection
+        self.min_bricks_since_divergence = int(trader_cfg.get("min_bricks_since_divergence", 3))  # Relaxed: At least 3 bricks since divergence
+        self.optimal_atr_min_bps = float(trader_cfg.get("optimal_atr_min_bps", 2.0))  # Relaxed: ATR 2-12 bps for data collection
+        self.optimal_atr_max_bps = float(trader_cfg.get("optimal_atr_max_bps", 12.0))
 
         # Risk management (ULTRA-SELECTIVE - wider stops for high-probability setups)
         self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 14.0))  # Wider TP for high-probability setups
@@ -599,44 +599,43 @@ class RenkoAOTrader:
     # ------------------------- Signal Generation -------------------------
 
     def _check_entry(self, price: float, indicators: Indicators) -> Optional[Signal]:
-        """Check for entry signals based on divergence (ULTRA-SELECTIVE)."""
+        """Check for entry signals based on divergence (relaxed for data collection)."""
         if indicators.divergence_type is None:
             return None
 
-        # ULTRA-SELECTIVE: Divergence strength >0.1
+        # Filter 1: Divergence strength (relaxed for data collection)
         if indicators.divergence_strength < self.min_divergence_strength:
             LOG.debug(f"[renko_ao] divergence strength {indicators.divergence_strength:.2f} < {self.min_divergence_strength:.2f}")
             return None
 
-        # ULTRA-SELECTIVE: AO strength >0.15 or <-0.15
+        # Filter 2: AO strength (relaxed for data collection)
         ao_abs = abs(indicators.ao)
         if ao_abs < self.min_ao_strength:
             LOG.debug(f"[renko_ao] AO strength {ao_abs:.2f} < {self.min_ao_strength:.2f}")
             return None
 
-        # ULTRA-SELECTIVE: ATR 3-8 bps (optimal volatility)
+        # Filter 3: ATR range (relaxed for data collection)
         if self._current_renko_brick_size and price > 0:
             atr_bps = (self._current_renko_brick_size / price) * 10000
             if atr_bps < self.optimal_atr_min_bps or atr_bps > self.optimal_atr_max_bps:
-                LOG.debug(f"[renko_ao] ATR {atr_bps:.1f} bps not in optimal range {self.optimal_atr_min_bps}-{self.optimal_atr_max_bps}")
+                LOG.debug(f"[renko_ao] ATR {atr_bps:.1f} bps not in range {self.optimal_atr_min_bps}-{self.optimal_atr_max_bps}")
                 return None
 
-        # ULTRA-SELECTIVE: BB position <0.2 or >0.8 (extreme positions only)
+        # Filter 4: BB position (relaxed for data collection - BB enhancement is nice-to-have, not required)
         bb_enhanced = False
         if indicators.divergence_type == "bullish":
-            # Bullish divergence near lower BB (<0.2)
+            # Bullish divergence near lower BB
             if indicators.price_position_bb <= self.bb_enhancement_threshold:
                 bb_enhanced = True
         elif indicators.divergence_type == "bearish":
-            # Bearish divergence near upper BB (>0.8)
+            # Bearish divergence near upper BB
             if indicators.price_position_bb >= (1.0 - self.bb_enhancement_threshold):
                 bb_enhanced = True
 
-        if not bb_enhanced:
-            LOG.debug(f"[renko_ao] BB position {indicators.price_position_bb:.2f} not in extreme zone")
-            return None
+        # BB enhancement is now optional (not required) - we'll track it in analytics
+        # This allows more trades while still preferring BB-enhanced setups
 
-        # ULTRA-SELECTIVE: At least 3 bricks since divergence started (confirmation)
+        # Filter 5: Bricks since divergence (relaxed for data collection)
         divergence_key = indicators.divergence_type
         if divergence_key not in self._divergence_start_brick:
             self._divergence_start_brick[divergence_key] = len(self._renko_bricks)

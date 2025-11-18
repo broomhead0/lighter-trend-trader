@@ -83,10 +83,13 @@ renko_ao:
   bb_period: 20  # Period for BB calculation
   bb_std: 2.0  # Standard deviation multiplier for BB
 
-  # Entry filters
-  bb_enhancement_threshold: 0.3  # Within 30% of BB edge for enhanced signal (relaxed from 0.2)
-  min_divergence_strength: 0.08  # Minimum divergence strength (0.0 to 1.0) - balanced selectivity
-  min_bricks_since_divergence: 4  # At least 4 bricks since divergence started (increased from 3)
+  # Entry filters (relaxed for data collection - will tighten based on results)
+  bb_enhancement_threshold: 0.4  # Within 40% of BB edge (relaxed from 0.3 to allow more trades)
+  min_divergence_strength: 0.05  # Minimum divergence strength (relaxed from 0.08 for data collection)
+  min_ao_strength: 0.10  # AO strength threshold (relaxed from 0.15 for data collection)
+  min_bricks_since_divergence: 3  # At least 3 bricks since divergence (relaxed from 4)
+  optimal_atr_min_bps: 2.0  # Minimum ATR in bps (relaxed from 3.0)
+  optimal_atr_max_bps: 12.0  # Maximum ATR in bps (relaxed from 8.0)
 
   # Risk management
   take_profit_bps: 10.0  # Target profit in basis points
