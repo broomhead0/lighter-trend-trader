@@ -621,7 +621,8 @@ class RenkoAOTrader:
                 LOG.debug(f"[renko_ao] ATR {atr_bps:.1f} bps not in range {self.optimal_atr_min_bps}-{self.optimal_atr_max_bps}")
                 return None
 
-        # Filter 4: BB position (relaxed for data collection - BB enhancement is nice-to-have, not required)
+        # Filter 4: BB position (optional enhancement - not required for entry, but tracked for analytics)
+        # BB enhancement is now optional to allow more trades for data collection
         bb_enhanced = False
         if indicators.divergence_type == "bullish":
             # Bullish divergence near lower BB
@@ -632,7 +633,7 @@ class RenkoAOTrader:
             if indicators.price_position_bb >= (1.0 - self.bb_enhancement_threshold):
                 bb_enhanced = True
 
-        # BB enhancement is now optional (not required) - we'll track it in analytics
+        # Note: BB enhancement is optional (not required) - we'll track it in analytics
         # This allows more trades while still preferring BB-enhanced setups
 
         # Filter 5: Bricks since divergence (relaxed for data collection)
