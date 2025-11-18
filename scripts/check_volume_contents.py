@@ -19,7 +19,7 @@ if os.path.exists(data_path):
     try:
         items = os.listdir(data_path)
         print(f"  Items: {items}")
-        
+
         total_size = 0
         for item in items:
             item_path = os.path.join(data_path, item)
@@ -48,7 +48,7 @@ for db_path in db_paths:
         size = os.path.getsize(db_path)
         size_mb = size / (1024 * 1024)
         print(f"    Size: {size:,} bytes ({size_mb:.2f} MB)")
-        
+
         # Check for WAL file
         wal_path = db_path + "-wal"
         if os.path.exists(wal_path):
@@ -62,4 +62,5 @@ print(f"\nEnvironment:")
 print(f"  PNL_DB_PATH: {os.environ.get('PNL_DB_PATH', 'NOT SET')}")
 
 print("\n" + "=" * 60)
+
 

@@ -104,7 +104,12 @@ class PnLTracker:
             test_cursor = conn.execute("SELECT COUNT(*) FROM trades")
             test_cursor.fetchone()
 
-            LOG.info(f"[pnl_tracker] ✅ Database initialized and verified: {self.db_path}")
+            # Log database status
+            if os.path.exists(self.db_path):
+                file_size = os.path.getsize(self.db_path)
+                LOG.warning(f"[pnl_tracker] ✅ Database initialized: {self.db_path} ({file_size:,} bytes)")
+            else:
+                LOG.warning(f"[pnl_tracker] ✅ Database initialized: {self.db_path} (will be created on first write)")
         except Exception as e:
             LOG.exception(f"[pnl_tracker] ❌ CRITICAL: Failed to initialize database at {self.db_path}: {e}")
             raise

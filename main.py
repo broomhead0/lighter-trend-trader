@@ -196,12 +196,24 @@ async def main():
             LOG.warning("⚠️ WARNING: Using /tmp for database (NOT PERSISTENT on Railway). Set PNL_DB_PATH env var or mount a volume at /data or /persist")
 
     # CRITICAL: Log database path and verify it exists
+    LOG.warning("=" * 80)
+    LOG.warning("DATABASE INITIALIZATION")
+    LOG.warning("=" * 80)
     LOG.warning(f"🔍 DATABASE PATH: {pnl_db_path}")
-    LOG.warning(f"🔍 Database directory exists: {os.path.exists(os.path.dirname(pnl_db_path))}")
+    LOG.warning(f"🔍 Database directory: {os.path.dirname(pnl_db_path)}")
+    LOG.warning(f"🔍 Directory exists: {os.path.exists(os.path.dirname(pnl_db_path))}")
     LOG.warning(f"🔍 Database file exists: {os.path.exists(pnl_db_path)}")
     if os.path.exists(pnl_db_path):
         file_size = os.path.getsize(pnl_db_path)
-        LOG.warning(f"🔍 Database file size: {file_size} bytes")
+        LOG.warning(f"🔍 Database file size: {file_size:,} bytes ({file_size / 1024 / 1024:.2f} MB)")
+        # Check WAL file too
+        wal_path = pnl_db_path + "-wal"
+        if os.path.exists(wal_path):
+            wal_size = os.path.getsize(wal_path)
+            LOG.warning(f"🔍 WAL file size: {wal_size:,} bytes ({wal_size / 1024 / 1024:.2f} MB)")
+    else:
+        LOG.warning(f"🔍 Database file will be created on first write")
+    LOG.warning("=" * 80)
 
     pnl_tracker = PnLTracker(db_path=pnl_db_path)
     LOG.info(f"PnL tracker initialized: {pnl_db_path} (database-backed for high volume)")

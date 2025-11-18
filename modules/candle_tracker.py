@@ -98,7 +98,12 @@ class CandleTracker:
             test_cursor = conn.execute("SELECT COUNT(*) FROM candles")
             test_cursor.fetchone()
 
-            LOG.info(f"[candle_tracker] ✅ Database initialized and verified: {self.db_path}")
+            # Log database status
+            if os.path.exists(self.db_path):
+                file_size = os.path.getsize(self.db_path)
+                LOG.warning(f"[candle_tracker] ✅ Database initialized: {self.db_path} ({file_size:,} bytes)")
+            else:
+                LOG.warning(f"[candle_tracker] ✅ Database initialized: {self.db_path} (will be created on first write)")
         except Exception as e:
             LOG.exception(f"[candle_tracker] ❌ CRITICAL: Failed to initialize database at {self.db_path}: {e}")
             raise

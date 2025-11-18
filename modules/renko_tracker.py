@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import sqlite3
 import time
 from typing import Any, Dict, List, Optional
@@ -48,7 +49,6 @@ class RenkoTracker:
         """Initialize database schema for Renko bricks and price history."""
         try:
             # Ensure directory exists
-            import os
             db_dir = os.path.dirname(self.db_path)
             if db_dir:
                 os.makedirs(db_dir, exist_ok=True)
@@ -99,7 +99,12 @@ class RenkoTracker:
             test_cursor = conn.execute("SELECT COUNT(*) FROM renko_bricks")
             test_cursor.fetchone()
 
-            LOG.info(f"[renko_tracker] ✅ Database initialized and verified: {self.db_path}")
+            # Log database status
+            if os.path.exists(self.db_path):
+                file_size = os.path.getsize(self.db_path)
+                LOG.warning(f"[renko_tracker] ✅ Database initialized: {self.db_path} ({file_size:,} bytes)")
+            else:
+                LOG.warning(f"[renko_tracker] ✅ Database initialized: {self.db_path} (will be created on first write)")
         except Exception as e:
             LOG.exception(f"[renko_tracker] ❌ CRITICAL: Failed to initialize database at {self.db_path}: {e}")
             raise
