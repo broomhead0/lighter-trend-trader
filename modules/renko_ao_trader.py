@@ -119,13 +119,13 @@ class RenkoAOTrader:
         self.bb_period = int(trader_cfg.get("bb_period", 20))
         self.bb_std = float(trader_cfg.get("bb_std", 2.0))
 
-        # Entry filters (relaxed for data collection - will tighten based on results)
-        self.bb_enhancement_threshold = float(trader_cfg.get("bb_enhancement_threshold", 0.4))  # Relaxed: BB <0.4 or >0.6 for data collection
-        self.min_divergence_strength = float(trader_cfg.get("min_divergence_strength", 0.05))  # Relaxed: Divergence >0.05 for data collection
-        self.min_ao_strength = float(trader_cfg.get("min_ao_strength", 0.10))  # Relaxed: AO >0.10 or <-0.10 for data collection
-        self.min_bricks_since_divergence = int(trader_cfg.get("min_bricks_since_divergence", 3))  # Relaxed: At least 3 bricks since divergence
-        self.optimal_atr_min_bps = float(trader_cfg.get("optimal_atr_min_bps", 2.0))  # Relaxed: ATR 2-12 bps for data collection
-        self.optimal_atr_max_bps = float(trader_cfg.get("optimal_atr_max_bps", 12.0))
+        # Entry filters (reverted to stricter after bug fix - will relax if needed based on trade frequency)
+        self.bb_enhancement_threshold = float(trader_cfg.get("bb_enhancement_threshold", 0.3))  # BB <0.3 or >0.7 (optional enhancement)
+        self.min_divergence_strength = float(trader_cfg.get("min_divergence_strength", 0.08))  # Divergence >0.08 (balanced selectivity)
+        self.min_ao_strength = float(trader_cfg.get("min_ao_strength", 0.15))  # AO >0.15 or <-0.15 (strong momentum)
+        self.min_bricks_since_divergence = int(trader_cfg.get("min_bricks_since_divergence", 4))  # At least 4 bricks since divergence (confirmation)
+        self.optimal_atr_min_bps = float(trader_cfg.get("optimal_atr_min_bps", 3.0))  # ATR 3-8 bps (optimal volatility range)
+        self.optimal_atr_max_bps = float(trader_cfg.get("optimal_atr_max_bps", 8.0))
 
         # Risk management (ULTRA-SELECTIVE - wider stops for high-probability setups)
         self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 14.0))  # Wider TP for high-probability setups
@@ -599,7 +599,7 @@ class RenkoAOTrader:
     # ------------------------- Signal Generation -------------------------
 
     def _check_entry(self, price: float, indicators: Indicators) -> Optional[Signal]:
-        """Check for entry signals based on divergence (relaxed for data collection)."""
+        """Check for entry signals based on divergence (stricter filters - will relax if needed)."""
         if indicators.divergence_type is None:
             return None
 
