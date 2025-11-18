@@ -104,7 +104,7 @@ breakout:
   enabled: false  # Set to true to enable Breakout strategy
   dry_run: true  # Set to false for live trading (start with true!)
   market: market:2  # SOL market
-  candle_interval_seconds: 60  # 1 minute for faster testing (was 900s/15min for production)
+  candle_interval_seconds: 900  # 15 minutes (optimal for breakout detection - longer timeframes reduce noise)
 
   # Optional: Per-strategy account config (for account separation)
   # If not provided, falls back to shared api config above
