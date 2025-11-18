@@ -46,48 +46,63 @@ class RenkoTracker:
 
     def _init_db(self) -> None:
         """Initialize database schema for Renko bricks and price history."""
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
+        try:
+            # Ensure directory exists
+            import os
+            db_dir = os.path.dirname(self.db_path)
+            if db_dir:
+                os.makedirs(db_dir, exist_ok=True)
+            
+            conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
 
-        # Create renko_bricks table
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS renko_bricks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                strategy TEXT NOT NULL,
-                market TEXT NOT NULL,
-                open_time INTEGER NOT NULL,
-                open REAL NOT NULL,
-                close REAL NOT NULL,
-                direction TEXT NOT NULL,
-                high REAL NOT NULL,
-                low REAL NOT NULL,
-                created_at REAL NOT NULL,
-                UNIQUE(strategy, market, open_time)
-            )
-        """)
+            # Create renko_bricks table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS renko_bricks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    strategy TEXT NOT NULL,
+                    market TEXT NOT NULL,
+                    open_time INTEGER NOT NULL,
+                    open REAL NOT NULL,
+                    close REAL NOT NULL,
+                    direction TEXT NOT NULL,
+                    high REAL NOT NULL,
+                    low REAL NOT NULL,
+                    created_at REAL NOT NULL,
+                    UNIQUE(strategy, market, open_time)
+                )
+            """)
 
-        # Create price_history table
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS price_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                strategy TEXT NOT NULL,
-                market TEXT NOT NULL,
-                price REAL NOT NULL,
-                timestamp REAL NOT NULL,
-                created_at REAL NOT NULL
-            )
-        """)
+            # Create price_history table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS price_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    strategy TEXT NOT NULL,
+                    market TEXT NOT NULL,
+                    price REAL NOT NULL,
+                    timestamp REAL NOT NULL,
+                    created_at REAL NOT NULL
+                )
+            """)
 
-        # Create indexes for fast queries
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_renko_strategy_market ON renko_bricks(strategy, market)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_renko_open_time ON renko_bricks(open_time)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_price_strategy_market ON price_history(strategy, market)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_price_timestamp ON price_history(timestamp)")
+            # Create indexes for fast queries
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_renko_strategy_market ON renko_bricks(strategy, market)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_renko_open_time ON renko_bricks(open_time)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_price_strategy_market ON price_history(strategy, market)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_price_timestamp ON price_history(timestamp)")
 
-        conn.commit()
-        self._conn = conn
-        LOG.info(f"[renko_tracker] Database initialized: {self.db_path}")
+            conn.commit()
+            self._conn = conn
+            
+            # Verify database is writable
+            test_cursor = conn.execute("SELECT COUNT(*) FROM renko_bricks")
+            test_cursor.fetchone()
+            
+            LOG.info(f"[renko_tracker] ✅ Database initialized and verified: {self.db_path}")
+        except Exception as e:
+            LOG.exception(f"[renko_tracker] ❌ CRITICAL: Failed to initialize database at {self.db_path}: {e}")
+            raise
 
     async def save_bricks(self, strategy: str, market: str, bricks: List[Dict[str, Any]]) -> None:
         """Save or update Renko bricks for a strategy."""

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -64,39 +65,54 @@ class PositionTracker:
 
     def _init_db(self) -> None:
         """Initialize database schema for positions."""
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
+        try:
+            # Ensure directory exists
+            import os
+            db_dir = os.path.dirname(self.db_path)
+            if db_dir:
+                os.makedirs(db_dir, exist_ok=True)
+            
+            conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
 
-        # Create positions table
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS positions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                strategy TEXT NOT NULL,
-                side TEXT NOT NULL,
-                entry_price REAL NOT NULL,
-                size REAL NOT NULL,
-                stop_loss REAL NOT NULL,
-                take_profit REAL NOT NULL,
-                entry_time REAL NOT NULL,
-                entry_ao REAL DEFAULT 0.0,
-                order_index INTEGER DEFAULT 0,
-                initial_size REAL DEFAULT 0.0,
-                scaled_entries TEXT DEFAULT '[]',
-                market TEXT NOT NULL DEFAULT 'market:2',
-                created_at REAL NOT NULL,
-                updated_at REAL NOT NULL,
-                UNIQUE(strategy, market)
-            )
-        """)
+            # Create positions table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS positions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    strategy TEXT NOT NULL,
+                    side TEXT NOT NULL,
+                    entry_price REAL NOT NULL,
+                    size REAL NOT NULL,
+                    stop_loss REAL NOT NULL,
+                    take_profit REAL NOT NULL,
+                    entry_time REAL NOT NULL,
+                    entry_ao REAL DEFAULT 0.0,
+                    order_index INTEGER DEFAULT 0,
+                    initial_size REAL DEFAULT 0.0,
+                    scaled_entries TEXT DEFAULT '[]',
+                    market TEXT NOT NULL DEFAULT 'market:2',
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    UNIQUE(strategy, market)
+                )
+            """)
 
-        # Create indexes
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_strategy_market ON positions(strategy, market)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_time ON positions(entry_time)")
+            # Create indexes
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_strategy_market ON positions(strategy, market)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_time ON positions(entry_time)")
 
-        conn.commit()
-        self._conn = conn
-        LOG.info(f"[position_tracker] Database initialized: {self.db_path}")
+            conn.commit()
+            self._conn = conn
+            
+            # Verify database is writable
+            test_cursor = conn.execute("SELECT COUNT(*) FROM positions")
+            test_cursor.fetchone()
+            
+            LOG.info(f"[position_tracker] ✅ Database initialized and verified: {self.db_path}")
+        except Exception as e:
+            LOG.exception(f"[position_tracker] ❌ CRITICAL: Failed to initialize database at {self.db_path}: {e}")
+            raise
 
     async def save_position(self, strategy: str, position: Dict[str, Any], market: str = "market:2") -> None:
         """Save or update a position state."""

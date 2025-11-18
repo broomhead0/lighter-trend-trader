@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -60,39 +61,53 @@ class PnLTracker:
 
     def _init_db(self) -> None:
         """Initialize database schema."""
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for better concurrency
-        conn.execute("PRAGMA synchronous=NORMAL")  # Balance between safety and speed
-        conn.execute("PRAGMA cache_size=-64000")  # 64MB cache for better performance
+        try:
+            # Ensure directory exists
+            db_dir = os.path.dirname(self.db_path)
+            if db_dir:
+                os.makedirs(db_dir, exist_ok=True)
+            
+            conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for better concurrency
+            conn.execute("PRAGMA synchronous=NORMAL")  # Balance between safety and speed
+            conn.execute("PRAGMA cache_size=-64000")  # 64MB cache for better performance
 
-        # Create trades table
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS trades (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                strategy TEXT NOT NULL,
-                side TEXT NOT NULL,
-                entry_price REAL NOT NULL,
-                exit_price REAL NOT NULL,
-                size REAL NOT NULL,
-                pnl_pct REAL NOT NULL,
-                pnl_usd REAL NOT NULL,
-                entry_time REAL NOT NULL,
-                exit_time REAL NOT NULL,
-                exit_reason TEXT NOT NULL,
-                market TEXT NOT NULL,
-                created_at REAL NOT NULL
-            )
-        """)
+            # Create trades table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS trades (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    strategy TEXT NOT NULL,
+                    side TEXT NOT NULL,
+                    entry_price REAL NOT NULL,
+                    exit_price REAL NOT NULL,
+                    size REAL NOT NULL,
+                    pnl_pct REAL NOT NULL,
+                    pnl_usd REAL NOT NULL,
+                    entry_time REAL NOT NULL,
+                    exit_time REAL NOT NULL,
+                    exit_reason TEXT NOT NULL,
+                    market TEXT NOT NULL,
+                    created_at REAL NOT NULL
+                )
+            """)
 
-        # Create indexes for fast queries
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_strategy ON trades(strategy)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_exit_time ON trades(exit_time)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_market ON trades(market)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_pnl_pct ON trades(pnl_pct)")
+            # Create indexes for fast queries
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_strategy ON trades(strategy)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_exit_time ON trades(exit_time)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_market ON trades(market)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_pnl_pct ON trades(pnl_pct)")
 
-        conn.commit()
-        self._conn = conn
-        LOG.info(f"[pnl_tracker] Database initialized: {self.db_path}")
+            conn.commit()
+            self._conn = conn
+            
+            # Verify database is writable
+            test_cursor = conn.execute("SELECT COUNT(*) FROM trades")
+            test_cursor.fetchone()
+            
+            LOG.info(f"[pnl_tracker] ✅ Database initialized and verified: {self.db_path}")
+        except Exception as e:
+            LOG.exception(f"[pnl_tracker] ❌ CRITICAL: Failed to initialize database at {self.db_path}: {e}")
+            raise
 
     async def record_trade(
         self,
@@ -108,12 +123,21 @@ class PnLTracker:
         market: str,
     ) -> None:
         """Record a completed trade."""
+        if not self._conn:
+            LOG.error(f"[pnl_tracker] ❌ Cannot record trade: database connection is None (db_path={self.db_path})")
+            raise RuntimeError("Database connection not initialized")
+        
         # Calculate approximate USD PnL
         # For SOL, use exit_price as approximation (could be improved with actual USD conversion)
         pnl_usd = (pnl_pct / 100.0) * exit_price * size
 
         async with self._lock:
             try:
+                # Verify database file exists and is writable
+                if not os.path.exists(self.db_path):
+                    LOG.error(f"[pnl_tracker] ❌ Database file does not exist: {self.db_path}")
+                    raise FileNotFoundError(f"Database file not found: {self.db_path}")
+                
                 self._conn.execute("""
                     INSERT INTO trades (
                         strategy, side, entry_price, exit_price, size,
@@ -126,10 +150,19 @@ class PnLTracker:
                     exit_reason, market, time.time()
                 ))
                 self._conn.commit()
-                LOG.info(f"[pnl_tracker] ✅ Recorded trade: {strategy} {side} {pnl_pct:.2f}% (entry={entry_price:.2f}, exit={exit_price:.2f}, size={size:.4f})")
+                
+                # Verify the write succeeded
+                verify_cursor = self._conn.execute("SELECT COUNT(*) FROM trades WHERE strategy = ? AND exit_time = ?", (strategy, exit_time))
+                count = verify_cursor.fetchone()[0]
+                if count == 0:
+                    LOG.error(f"[pnl_tracker] ❌ Trade was not saved! Verification query returned 0 rows")
+                    raise RuntimeError("Trade write verification failed")
+                
+                LOG.info(f"[pnl_tracker] ✅ Recorded trade: {strategy} {side} {pnl_pct:.2f}% (entry={entry_price:.2f}, exit={exit_price:.2f}, size={size:.4f}) - VERIFIED in DB")
             except Exception as e:
                 LOG.exception(f"[pnl_tracker] ❌ Error recording trade: {e}")
-                self._conn.rollback()
+                if self._conn:
+                    self._conn.rollback()
                 raise  # Re-raise to surface the error
 
     async def get_stats(

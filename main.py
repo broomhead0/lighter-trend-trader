@@ -158,7 +158,14 @@ async def main():
     # Initialize PnL tracker (database-backed for high volume)
     # Use persistent path: Check for Railway volume, then fallback to local
     pnl_db_path = os.environ.get("PNL_DB_PATH")
-    if not pnl_db_path:
+    if pnl_db_path:
+        # PNL_DB_PATH is explicitly set - use it (volume should be mounted)
+        # Ensure directory exists
+        db_dir = os.path.dirname(pnl_db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+        LOG.info(f"Using PNL_DB_PATH from environment: {pnl_db_path}")
+    else:
         # Try multiple persistent locations
         # Railway volumes might be at /data, /persist (these are persistent)
         # /tmp is NOT persistent on Railway, so we avoid it

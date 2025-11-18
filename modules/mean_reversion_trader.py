@@ -820,7 +820,7 @@ class MeanReversionTrader:
         if self._current_position:
             LOG.warning(f"[mean_reversion] ⚠️  Already in position ({self._current_position['side']} {self._current_position['size']:.4f} SOL), skipping new entry")
             return
-        
+
         # In dry-run mode, we can simulate without trading client
         if not self.trading_client and not self.dry_run:
             LOG.warning("[mean_reversion] no trading client, cannot enter position")

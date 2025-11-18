@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -57,35 +58,50 @@ class CandleTracker:
 
     def _init_db(self) -> None:
         """Initialize database schema for candles."""
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
+        try:
+            # Ensure directory exists
+            import os
+            db_dir = os.path.dirname(self.db_path)
+            if db_dir:
+                os.makedirs(db_dir, exist_ok=True)
+            
+            conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
 
-        # Create candles table
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS candles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                strategy TEXT NOT NULL,
-                market TEXT NOT NULL,
-                open_time INTEGER NOT NULL,
-                open REAL NOT NULL,
-                high REAL NOT NULL,
-                low REAL NOT NULL,
-                close REAL NOT NULL,
-                volume REAL NOT NULL,
-                created_at REAL NOT NULL,
-                UNIQUE(strategy, market, open_time)
-            )
-        """)
+            # Create candles table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS candles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    strategy TEXT NOT NULL,
+                    market TEXT NOT NULL,
+                    open_time INTEGER NOT NULL,
+                    open REAL NOT NULL,
+                    high REAL NOT NULL,
+                    low REAL NOT NULL,
+                    close REAL NOT NULL,
+                    volume REAL NOT NULL,
+                    created_at REAL NOT NULL,
+                    UNIQUE(strategy, market, open_time)
+                )
+            """)
 
-        # Create indexes for fast queries
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_strategy_market ON candles(strategy, market)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_open_time ON candles(open_time)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_strategy_market_time ON candles(strategy, market, open_time)")
+            # Create indexes for fast queries
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_strategy_market ON candles(strategy, market)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_open_time ON candles(open_time)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_strategy_market_time ON candles(strategy, market, open_time)")
 
-        conn.commit()
-        self._conn = conn
-        LOG.info(f"[candle_tracker] Database initialized: {self.db_path}")
+            conn.commit()
+            self._conn = conn
+            
+            # Verify database is writable
+            test_cursor = conn.execute("SELECT COUNT(*) FROM candles")
+            test_cursor.fetchone()
+            
+            LOG.info(f"[candle_tracker] ✅ Database initialized and verified: {self.db_path}")
+        except Exception as e:
+            LOG.exception(f"[candle_tracker] ❌ CRITICAL: Failed to initialize database at {self.db_path}: {e}")
+            raise
 
     async def save_candles(self, strategy: str, market: str, candles: List[Dict[str, Any]]) -> None:
         """Save or update candles for a strategy."""
