@@ -1,6 +1,6 @@
 # Master Context Document - Lighter Trend Trader
 
-**Last Updated:** 2025-11-17 (unified analytics design, self-learning infrastructure planning, Renko optimization analysis)
+**Last Updated:** 2025-11-18 (Renko optimizations implemented, brick persistence working, database persistence fixed, entry filters relaxed for data collection)
 **Purpose:** This document contains all critical context needed to understand and work with this project when context is lost.
 
 ---
@@ -74,13 +74,26 @@
 ### 2. Renko + AO Strategy (Divergence/Mean Reversion)
 **File:** `modules/renko_ao_trader.py`
 **Type:** Counter-Trend (trades AGAINST the trend on divergences)
-**Status:** Active, monitoring (no trades yet)
+**Status:** Active, trading (filters relaxed for data collection)
 
-**Entry Conditions:**
+**Entry Conditions (Relaxed for Data Collection - 2025-11-18):**
 - **Bullish Divergence:** Price makes lower low, AO makes higher low → Long
 - **Bearish Divergence:** Price makes higher high, AO makes lower high → Short
-- Divergence strength must be ≥ 0.3 (0.0 to 1.0 scale)
-- Enhanced signal if divergence occurs near Bollinger Bands (within 20% of edge)
+- Divergence strength must be ≥ 0.05 (relaxed from 0.08 for data collection)
+- AO strength must be ≥ 0.10 (relaxed from 0.15 for data collection)
+- BB enhancement is OPTIONAL (not required) - tracked for analytics
+- ATR range: 2-12 bps (relaxed from 3-8 bps)
+- At least 3 bricks since divergence (relaxed from 4)
+
+**Key Parameters (Optimized - 2025-11-18):**
+- `renko_atr_multiplier: 1.3` (30% larger bricks for stronger signals, up from 1.0)
+- `renko_lookback: 30` (increased from 20 for better pattern detection)
+- `min_divergence_strength: 0.05` (relaxed from 0.08 for data collection)
+- `min_ao_strength: 0.10` (relaxed from 0.15 for data collection)
+- `bb_enhancement_threshold: 0.4` (relaxed from 0.3, now optional)
+- `min_bricks_since_divergence: 3` (relaxed from 4 for faster entries)
+- `optimal_atr_min_bps: 2.0` (relaxed from 3.0)
+- `optimal_atr_max_bps: 12.0` (relaxed from 8.0)
 
 **Exit Conditions:**
 - Take profit: 12.0 bps (increased from 10.0 for better R:R)
@@ -278,13 +291,15 @@ railway variables --set "ACCOUNT_INDEX=281474976639501" \
 - All accounts are under the same wallet (`0xE7C753eD56B4258b1a700D9A1732D5bCff179A11`)
 
 **Persistent Storage:**
-- **Database**: `/tmp/pnl_trades.db` (persists across deployments)
-- **Backups**: `/tmp/backups/` (hourly, keeps last 10)
-- **Environment Variable**: `PNL_DB_PATH=/tmp/pnl_trades.db` (already set in Railway)
+- **Database**: `/data/pnl_trades.db` (persists across deployments via Railway volume)
+- **Railway Volume**: `lighter-trend-trader-volume` mounted at `/data` (500MB)
+- **Environment Variable**: `PNL_DB_PATH=/data/pnl_trades.db` (set in Railway)
+- **Backups**: `/data/backups/` (hourly, keeps last 10)
 - **Backup Config**: Enabled by default (`pnl_backup.enabled: true`)
 - **Query Tool**: `scripts/query_pnl.py` for analysis (see Performance Tracking section)
+- **⚠️ CRITICAL FIX (2025-11-18):** Previously used `/tmp` which is NOT persistent on Railway. Now uses `/data` volume for true persistence.
 
-**Continuity Across Deploys (CRITICAL - 2025-11-17):**
+**Continuity Across Deploys (CRITICAL - 2025-11-18):**
 - **Positions**: Automatically recovered from database on startup (all strategies)
   - RSI+BB, Renko+AO, Breakout all recover positions on startup
   - Bot resumes managing positions immediately after deploy
@@ -292,9 +307,12 @@ railway variables --set "ACCOUNT_INDEX=281474976639501" \
   - Previously: 12.5 hours to collect 50 candles after each deploy
   - Now: Candles loaded instantly, ready to trade immediately
   - Saved on creation/update, loaded on startup
-- **Renko Bricks**: (To be implemented) Will persist bricks and price history
-  - Currently: Lost on deploy, need to rebuild 20-30 bricks (takes hours)
-  - Future: Bricks loaded instantly, ready to trade immediately
+  - ✅ VERIFIED: Tested and confirmed working (4 candles recovered on deploy)
+- **Renko Bricks & Price History**: Automatically recovered from database on startup (renko_ao strategy)
+  - Previously: Lost on deploy, need to rebuild 20-30 bricks (takes hours)
+  - Now: Bricks and price history loaded instantly, ready to trade immediately
+  - Saved on brick creation, price history saved every 100 prices
+  - ✅ VERIFIED: Tested and confirmed working (800 price points recovered on deploy)
 - **Trades**: All trades saved to database for historical analysis
   - Every closed position automatically recorded
   - Persists across deploys for PnL analysis
@@ -423,16 +441,47 @@ lighter-trend-trader/
 
 ### Renko + AO Strategy
 - ✅ Running and computing indicators
-- ✅ Bricks forming correctly
+- ✅ Bricks forming correctly with ATR-based sizing (1.3x multiplier)
+- ✅ Brick and price history persistence working (recovered on deploy)
 - ✅ Adaptive trading features active (losing streak pauses)
-- ✅ Trades being placed (threshold lowered to 0.05)
+- ✅ Entry filters relaxed for data collection (2025-11-18)
+  - Divergence: 0.08 → 0.05 (37% more lenient)
+  - AO strength: 0.15 → 0.10 (33% more lenient)
+  - BB enhancement: Now OPTIONAL (was required)
+  - ATR range: 3-8bps → 2-12bps (wider)
+  - Bricks since divergence: 4 → 3 (faster entries)
 - 📊 Recent performance: 2 trades, 2W/0L, +0.06% net (100% win rate)
 - 📊 Average win: +0.0300%
 
 ### Known Issues
 1. **REST API 404s:** Candle fetching often fails, but fallback (WebSocket) works
 2. **Volume Data:** Not available from WebSocket, volume filter skipped if volume = 0
-3. **Divergence Strength:** Renko strategy threshold lowered to 0.05 (was 0.3) - now generating trades
+
+### Recent Changes (2025-11-18)
+
+**1. Renko Strategy Optimizations:**
+- Brick size: 1.0 → 1.3 (30% larger for stronger signals)
+- Lookback: 20 → 30 bricks (better pattern detection)
+- Divergence threshold: 0.08 → 0.05 (relaxed for data collection)
+- Confirmation: 4 → 3 bricks (faster entries)
+
+**2. Renko Persistence (Implemented & Verified):**
+- Renko bricks saved to database on creation
+- Price history saved every 100 prices
+- Both recovered on startup (verified working)
+- No more data loss on deploy
+
+**3. Database Persistence Fix (Critical):**
+- **Problem:** Database was using `/tmp` which is NOT persistent on Railway
+- **Solution:** Created Railway volume at `/data`, set `PNL_DB_PATH=/data/pnl_trades.db`
+- **Result:** All data (trades, positions, candles, bricks) now persists across deploys
+- **Verification:** Tested and confirmed - candles and price history recovered successfully
+
+**4. Entry Filters Relaxed for Data Collection:**
+- Goal: Gather more trade data to analyze what works
+- Changes: All filters relaxed (see Renko + AO Strategy section above)
+- Expected: 2-3x more trades for data analysis
+- Future: Will tighten filters based on data analysis results
 
 ### Recent Optimizations (2025-11-15)
 1. **Parameter Tweaks Based on PnL Analysis:**
@@ -679,9 +728,10 @@ python scripts/test_order.py --account-index 281474976639501 --api-key-index 16 
   - Defaults: `min=0.1`, `max=0.1` SOL (meets Lighter minimum notional requirement ~$14)
   - Adaptive sizing: Reduces by 30% in low vol, 20% after losing streak
 - **Base Scale**: 1000 (1 SOL = 1000 base units) - configured in code, can override via `BASE_SCALE` env var
-- **PnL Tracking**: Database-backed (`/tmp/pnl_trades.db`) for high-volume scalability
-- **Persistent Storage**: Auto-detects path (`/data`, `/persist`, `/tmp`, or local)
-- **Backups**: Automatic hourly backups to `/tmp/backups/` (keeps last 10)
+- **PnL Tracking**: Database-backed (`/data/pnl_trades.db`) for high-volume scalability
+- **Persistent Storage**: Railway volume at `/data` (preferred), fallback to `/persist` or `/tmp` (with warning)
+- **Backups**: Automatic hourly backups to `/data/backups/` (keeps last 10)
+- **Railway Volume**: `lighter-trend-trader-volume` (500MB) mounted at `/data`
 - **Query Tool**: `scripts/query_pnl.py` for analysis (see Performance Tracking section)
 
 ---
