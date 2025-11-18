@@ -111,15 +111,16 @@ class RenkoTracker:
 
         async with self._lock:
             try:
-                conn = self._conn
-                if not conn:
+                # Verify database file exists
+                if not os.path.exists(self.db_path):
+                    LOG.error(f"[renko_tracker] ❌ Database file does not exist: {self.db_path}")
                     return
-
+                
                 now = time.time()
 
                 # Use INSERT OR REPLACE to handle updates
                 for brick in bricks:
-                    conn.execute("""
+                    self._conn.execute("""
                         INSERT OR REPLACE INTO renko_bricks (
                             strategy, market, open_time, open, close, direction, high, low, created_at
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -135,10 +136,20 @@ class RenkoTracker:
                         now,
                     ))
 
-                conn.commit()
-                LOG.debug(f"[renko_tracker] Saved {len(bricks)} bricks for {strategy} {market}")
+                self._conn.commit()
+                
+                # Verify the write succeeded
+                verify_cursor = self._conn.execute(
+                    "SELECT COUNT(*) FROM renko_bricks WHERE strategy = ? AND market = ?",
+                    (strategy, market)
+                )
+                count = verify_cursor.fetchone()[0]
+                
+                LOG.debug(f"[renko_tracker] ✅ Saved {len(bricks)} bricks for {strategy} {market} (total in DB: {count})")
             except Exception as e:
-                LOG.exception(f"[renko_tracker] Error saving bricks: {e}")
+                LOG.exception(f"[renko_tracker] ❌ Error saving bricks: {e}")
+                if self._conn:
+                    self._conn.rollback()
 
     async def load_bricks(self, strategy: str, market: str, limit: int = 200) -> List[Dict[str, Any]]:
         """Load Renko bricks for a strategy, sorted by open_time."""
