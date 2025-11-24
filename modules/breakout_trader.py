@@ -232,6 +232,17 @@ class BreakoutTrader:
                     await asyncio.sleep(5.0)
                     continue
 
+                # Periodic indicator logging (every 30 seconds) to see current state
+                if int(time.time()) % 30 == 0 and not self._current_position:
+                    vol_bps = indicators.volatility_bps
+                    breakout_long = indicators.breakout_level_long or 0
+                    breakout_short = indicators.breakout_level_short or 0
+                    LOG.info(f"[breakout] 📊 Indicators: price={current_price:.2f}, "
+                             f"vol={vol_bps:.1f}bps ({self.atr_min_bps}-{self.atr_max_bps}), "
+                             f"RSI={indicators.rsi:.1f}, "
+                             f"breakout_long={breakout_long:.2f}, breakout_short={breakout_short:.2f}, "
+                             f"ATR_exp={indicators.atr_expanding}, EMA20={indicators.ema_20:.2f}, EMA50={indicators.ema_50:.2f}")
+
                 # Check for exit signals if in position
                 if self._current_position:
                     exit_signal = self._check_exit(current_price, indicators)
@@ -750,7 +761,7 @@ class BreakoutTrader:
         # Volatility filter
         vol_bps = indicators.volatility_bps
         if vol_bps < self.atr_min_bps or vol_bps > self.atr_max_bps:
-            LOG.debug(f"[breakout] volatility filter: {vol_bps:.1f} bps (need {self.atr_min_bps}-{self.atr_max_bps})")
+            LOG.info(f"[breakout] ❌ FILTER: volatility {vol_bps:.1f} bps not in range {self.atr_min_bps}-{self.atr_max_bps}")
             return None
 
         # Check for long breakout
@@ -758,44 +769,73 @@ class BreakoutTrader:
             # Check if candle closed above breakout level (confirmation)
             latest_candle = self._candles[-1] if self._candles else None
             if latest_candle and latest_candle.close > indicators.breakout_level_long:
-                # All filters must pass
-                if (indicators.rsi > self.rsi_bullish_threshold and
-                    indicators.macd > indicators.macd_signal and
-                    indicators.atr_expanding and
-                    indicators.ema_20 > indicators.ema_50 and
-                    price > indicators.ema_20):
+                # Check each filter individually with logging
+                if indicators.rsi <= self.rsi_bullish_threshold:
+                    LOG.info(f"[breakout] ❌ FILTER: RSI {indicators.rsi:.1f} <= {self.rsi_bullish_threshold} (need >{self.rsi_bullish_threshold} for long)")
+                    return None
+                if indicators.macd <= indicators.macd_signal:
+                    LOG.info(f"[breakout] ❌ FILTER: MACD {indicators.macd:.4f} <= signal {indicators.macd_signal:.4f} (need bullish crossover)")
+                    return None
+                if not indicators.atr_expanding:
+                    LOG.info(f"[breakout] ❌ FILTER: ATR not expanding (need volatility expansion)")
+                    return None
+                if indicators.ema_20 <= indicators.ema_50:
+                    LOG.info(f"[breakout] ❌ FILTER: EMA20 {indicators.ema_20:.2f} <= EMA50 {indicators.ema_50:.2f} (need bullish alignment)")
+                    return None
+                if price <= indicators.ema_20:
+                    LOG.info(f"[breakout] ❌ FILTER: price {price:.2f} <= EMA20 {indicators.ema_20:.2f} (need price above EMA20)")
+                    return None
 
-                    # ENHANCED LOGGING
-                    hour = datetime.fromtimestamp(time.time()).hour
-                    minute = datetime.fromtimestamp(time.time()).minute
-                    LOG.info(f"[breakout] ENTRY CONDITIONS: "
-                             f"Breakout={price:.2f}>{indicators.breakout_level_long:.2f}, "
-                             f"RSI={indicators.rsi:.1f}, MACD={indicators.macd:.4f}>{indicators.macd_signal:.4f}, "
-                             f"ATR_exp={indicators.atr_expanding}, EMA_20={indicators.ema_20:.2f}>{indicators.ema_50:.2f}, "
-                             f"Vol={vol_bps:.1f}bps, Time={hour:02d}:{minute:02d}")
+                # All filters passed - log entry
+                hour = datetime.fromtimestamp(time.time()).hour
+                minute = datetime.fromtimestamp(time.time()).minute
+                LOG.info(f"[breakout] ✅ ENTRY SIGNAL: "
+                         f"Breakout={price:.2f}>{indicators.breakout_level_long:.2f}, "
+                         f"RSI={indicators.rsi:.1f}, MACD={indicators.macd:.4f}>{indicators.macd_signal:.4f}, "
+                         f"ATR_exp={indicators.atr_expanding}, EMA_20={indicators.ema_20:.2f}>{indicators.ema_50:.2f}, "
+                         f"Vol={vol_bps:.1f}bps, Time={hour:02d}:{minute:02d}")
 
-                    return self._create_signal("long", price, indicators, indicators.breakout_level_long)
+                return self._create_signal("long", price, indicators, indicators.breakout_level_long)
+            else:
+                LOG.debug(f"[breakout] price above breakout level but candle not closed above: price={price:.2f}, breakout={indicators.breakout_level_long:.2f}, candle_close={latest_candle.close:.2f if latest_candle else 'N/A'}")
+        elif indicators.breakout_level_long:
+            LOG.debug(f"[breakout] price not above breakout level: price={price:.2f}, breakout={indicators.breakout_level_long:.2f}")
 
         # Check for short breakout
         if indicators.breakout_level_short and price < indicators.breakout_level_short:
             latest_candle = self._candles[-1] if self._candles else None
             if latest_candle and latest_candle.close < indicators.breakout_level_short:
-                if (indicators.rsi < self.rsi_bearish_threshold and
-                    indicators.macd < indicators.macd_signal and
-                    indicators.atr_expanding and
-                    indicators.ema_20 < indicators.ema_50 and
-                    price < indicators.ema_20):
+                # Check each filter individually with logging
+                if indicators.rsi >= self.rsi_bearish_threshold:
+                    LOG.info(f"[breakout] ❌ FILTER: RSI {indicators.rsi:.1f} >= {self.rsi_bearish_threshold} (need <{self.rsi_bearish_threshold} for short)")
+                    return None
+                if indicators.macd >= indicators.macd_signal:
+                    LOG.info(f"[breakout] ❌ FILTER: MACD {indicators.macd:.4f} >= signal {indicators.macd_signal:.4f} (need bearish crossover)")
+                    return None
+                if not indicators.atr_expanding:
+                    LOG.info(f"[breakout] ❌ FILTER: ATR not expanding (need volatility expansion)")
+                    return None
+                if indicators.ema_20 >= indicators.ema_50:
+                    LOG.info(f"[breakout] ❌ FILTER: EMA20 {indicators.ema_20:.2f} >= EMA50 {indicators.ema_50:.2f} (need bearish alignment)")
+                    return None
+                if price >= indicators.ema_20:
+                    LOG.info(f"[breakout] ❌ FILTER: price {price:.2f} >= EMA20 {indicators.ema_20:.2f} (need price below EMA20)")
+                    return None
 
-                    # ENHANCED LOGGING
-                    hour = datetime.fromtimestamp(time.time()).hour
-                    minute = datetime.fromtimestamp(time.time()).minute
-                    LOG.info(f"[breakout] ENTRY CONDITIONS: "
-                             f"Breakout={price:.2f}<{indicators.breakout_level_short:.2f}, "
-                             f"RSI={indicators.rsi:.1f}, MACD={indicators.macd:.4f}<{indicators.macd_signal:.4f}, "
-                             f"ATR_exp={indicators.atr_expanding}, EMA_20={indicators.ema_20:.2f}<{indicators.ema_50:.2f}, "
-                             f"Vol={vol_bps:.1f}bps, Time={hour:02d}:{minute:02d}")
+                # All filters passed - log entry
+                hour = datetime.fromtimestamp(time.time()).hour
+                minute = datetime.fromtimestamp(time.time()).minute
+                LOG.info(f"[breakout] ✅ ENTRY SIGNAL: "
+                         f"Breakout={price:.2f}<{indicators.breakout_level_short:.2f}, "
+                         f"RSI={indicators.rsi:.1f}, MACD={indicators.macd:.4f}<{indicators.macd_signal:.4f}, "
+                         f"ATR_exp={indicators.atr_expanding}, EMA_20={indicators.ema_20:.2f}<{indicators.ema_50:.2f}, "
+                         f"Vol={vol_bps:.1f}bps, Time={hour:02d}:{minute:02d}")
 
-                    return self._create_signal("short", price, indicators, indicators.breakout_level_short)
+                return self._create_signal("short", price, indicators, indicators.breakout_level_short)
+            else:
+                LOG.debug(f"[breakout] price below breakout level but candle not closed below: price={price:.2f}, breakout={indicators.breakout_level_short:.2f}, candle_close={latest_candle.close:.2f if latest_candle else 'N/A'}")
+        elif indicators.breakout_level_short:
+            LOG.debug(f"[breakout] price not below breakout level: price={price:.2f}, breakout={indicators.breakout_level_short:.2f}")
 
         return None
 
