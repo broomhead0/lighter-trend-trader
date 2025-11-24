@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Main entry point for Lighter Trend Trader."""
 import asyncio
+import json
 import logging
 import os
 import signal
+import sqlite3
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -495,8 +497,105 @@ async def main():
                 await pnl_backup.backup()
                 await asyncio.sleep(300)  # Check every 5 minutes
 
+    # Simple HTTP server for DB stats (ONE way to access DB)
+    async def http_server():
+        """Simple HTTP server that serves DB stats."""
+        from aiohttp import web
+
+        async def get_db_stats(request):
+            """Return JSON with database stats."""
+            try:
+                stats = {
+                    "db_path": pnl_db_path,
+                    "db_exists": os.path.exists(pnl_db_path),
+                    "file_size_mb": 0,
+                    "wal_size_mb": 0,
+                    "total_size_mb": 0,
+                    "tables": {},
+                    "recent_trades": [],
+                    "strategy_stats": {},
+                }
+
+                if os.path.exists(pnl_db_path):
+                    stats["file_size_mb"] = round(os.path.getsize(pnl_db_path) / 1024 / 1024, 2)
+                    wal_path = pnl_db_path + "-wal"
+                    if os.path.exists(wal_path):
+                        stats["wal_size_mb"] = round(os.path.getsize(wal_path) / 1024 / 1024, 2)
+                    stats["total_size_mb"] = stats["file_size_mb"] + stats["wal_size_mb"]
+
+                    # Query database
+                    conn = sqlite3.connect(pnl_db_path, check_same_thread=False)
+                    conn.row_factory = sqlite3.Row
+                    cursor = conn.cursor()
+
+                    # Table counts
+                    for table in ["trades", "positions", "candles", "renko_bricks", "price_history"]:
+                        try:
+                            cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                            stats["tables"][table] = cursor.fetchone()[0]
+                        except:
+                            stats["tables"][table] = 0
+
+                    # Recent trades
+                    try:
+                        cursor.execute("""
+                            SELECT strategy, side, pnl_pct, entry_price, exit_price,
+                                   datetime(exit_time, 'unixepoch') as exit_time, exit_reason
+                            FROM trades
+                            ORDER BY exit_time DESC
+                            LIMIT 20
+                        """)
+                        stats["recent_trades"] = [dict(row) for row in cursor.fetchall()]
+                    except:
+                        pass
+
+                    # Strategy stats
+                    try:
+                        cursor.execute("""
+                            SELECT strategy,
+                                   COUNT(*) as total,
+                                   SUM(CASE WHEN pnl_pct > 0 THEN 1 ELSE 0 END) as wins,
+                                   SUM(CASE WHEN pnl_pct < 0 THEN 1 ELSE 0 END) as losses,
+                                   AVG(pnl_pct) as avg_pnl,
+                                   SUM(pnl_pct) as total_pnl
+                            FROM trades
+                            GROUP BY strategy
+                        """)
+                        for row in cursor.fetchall():
+                            stats["strategy_stats"][row["strategy"]] = {
+                                "total": row["total"],
+                                "wins": row["wins"],
+                                "losses": row["losses"],
+                                "win_rate": round(row["wins"] / row["total"] * 100, 1) if row["total"] > 0 else 0,
+                                "avg_pnl": round(row["avg_pnl"], 3),
+                                "total_pnl": round(row["total_pnl"], 3),
+                            }
+                    except:
+                        pass
+
+                    conn.close()
+
+                return web.json_response(stats)
+            except Exception as e:
+                return web.json_response({"error": str(e)}, status=500)
+
+        app = web.Application()
+        app.router.add_get("/db/stats", get_db_stats)
+        app.router.add_get("/", get_db_stats)  # Also serve on root for convenience
+
+        runner = web.AppRunner(app)
+        await runner.setup()
+        port = int(os.environ.get("DB_STATS_PORT", "8080"))
+        site = web.TCPSite(runner, "0.0.0.0", port)
+        await site.start()
+        LOG.info(f"✅ DB stats server running on http://0.0.0.0:{port}/db/stats")
+
+        # Keep running until stop event
+        await stop_event.wait()
+        await runner.cleanup()
+
     # Run traders and price feed in parallel
-    tasks = [price_feed.run(), stop_event.wait()]
+    tasks = [price_feed.run(), stop_event.wait(), http_server()]
 
     if rsi_bb_trader:
         tasks.append(rsi_bb_trader.run())

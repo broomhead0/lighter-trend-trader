@@ -84,8 +84,8 @@ async def main():
     parser = argparse.ArgumentParser(description="Query PnL database")
     parser.add_argument(
         "--db-path",
-        default=os.environ.get("PNL_DB_PATH", "pnl_trades.db"),
-        help="Path to PnL database (default: pnl_trades.db or PNL_DB_PATH env var)",
+        default=None,
+        help="Path to PnL database (default: auto-detect from PNL_DB_PATH or /data/pnl_trades.db)",
     )
     parser.add_argument(
         "--strategy",
@@ -113,6 +113,18 @@ async def main():
     )
 
     args = parser.parse_args()
+
+    # Auto-detect database path
+    if args.db_path is None:
+        args.db_path = os.environ.get("PNL_DB_PATH")
+        if args.db_path is None:
+            # Try common paths
+            for path in ["/data/pnl_trades.db", "/persist/pnl_trades.db", "pnl_trades.db"]:
+                if os.path.exists(path):
+                    args.db_path = path
+                    break
+            if args.db_path is None:
+                args.db_path = "/data/pnl_trades.db"  # Default for Railway
 
     # Initialize tracker
     tracker = PnLTracker(db_path=args.db_path)
