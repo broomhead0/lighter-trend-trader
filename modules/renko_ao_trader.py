@@ -605,20 +605,20 @@ class RenkoAOTrader:
 
         # Filter 1: Divergence strength (stricter - will relax if needed)
         if indicators.divergence_strength < self.min_divergence_strength:
-            LOG.debug(f"[renko_ao] divergence strength {indicators.divergence_strength:.2f} < {self.min_divergence_strength:.2f}")
+            LOG.info(f"[renko_ao] ❌ FILTER: divergence strength {indicators.divergence_strength:.2f} < {self.min_divergence_strength:.2f}")
             return None
 
         # Filter 2: AO strength (stricter - will relax if needed)
         ao_abs = abs(indicators.ao)
         if ao_abs < self.min_ao_strength:
-            LOG.debug(f"[renko_ao] AO strength {ao_abs:.2f} < {self.min_ao_strength:.2f}")
+            LOG.info(f"[renko_ao] ❌ FILTER: AO strength {ao_abs:.2f} < {self.min_ao_strength:.2f}")
             return None
 
         # Filter 3: ATR range (stricter - will relax if needed)
         if self._current_renko_brick_size and price > 0:
             atr_bps = (self._current_renko_brick_size / price) * 10000
             if atr_bps < self.optimal_atr_min_bps or atr_bps > self.optimal_atr_max_bps:
-                LOG.debug(f"[renko_ao] ATR {atr_bps:.1f} bps not in range {self.optimal_atr_min_bps}-{self.optimal_atr_max_bps}")
+                LOG.info(f"[renko_ao] ❌ FILTER: ATR {atr_bps:.1f} bps not in range {self.optimal_atr_min_bps}-{self.optimal_atr_max_bps}")
                 return None
 
         # Filter 4: BB position (optional enhancement - not required for entry, but tracked for analytics)
@@ -642,7 +642,7 @@ class RenkoAOTrader:
             self._divergence_start_brick[divergence_key] = len(self._renko_bricks)
         bricks_since_divergence = len(self._renko_bricks) - self._divergence_start_brick[divergence_key]
         if bricks_since_divergence < self.min_bricks_since_divergence:
-            LOG.debug(f"[renko_ao] only {bricks_since_divergence} bricks since divergence (need {self.min_bricks_since_divergence})")
+            LOG.info(f"[renko_ao] ❌ FILTER: only {bricks_since_divergence} bricks since divergence (need {self.min_bricks_since_divergence})")
             return None
 
         # Create signal
