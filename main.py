@@ -282,6 +282,86 @@ async def main():
         LOG.warning("Table row counts:")
         for table, count in analysis["table_counts"].items():
             LOG.warning(f"  {table:20} {count:>10,} rows")
+        
+        # PnL Analysis for maximizing profitability
+        if analysis["table_counts"].get("trades", 0) > 0:
+            try:
+                import sqlite3
+                pnl_conn = sqlite3.connect(pnl_db_path, check_same_thread=False)
+                pnl_conn.row_factory = sqlite3.Row
+                pnl_cursor = pnl_conn.cursor()
+                
+                # Overall stats
+                pnl_cursor.execute("""
+                    SELECT 
+                        COUNT(*) as total,
+                        SUM(CASE WHEN pnl_pct > 0 THEN 1 ELSE 0 END) as wins,
+                        SUM(CASE WHEN pnl_pct < 0 THEN 1 ELSE 0 END) as losses,
+                        SUM(pnl_pct) as total_pnl,
+                        AVG(pnl_pct) as avg_pnl,
+                        AVG(CASE WHEN pnl_pct > 0 THEN pnl_pct END) as avg_win,
+                        AVG(CASE WHEN pnl_pct < 0 THEN pnl_pct END) as avg_loss
+                    FROM trades
+                """)
+                overall = pnl_cursor.fetchone()
+                
+                if overall:
+                    total = overall["total"]
+                    wins = overall["wins"]
+                    losses = overall["losses"]
+                    total_pnl = overall["total_pnl"] or 0
+                    avg_pnl = overall["avg_pnl"] or 0
+                    avg_win = overall["avg_win"] or 0
+                    avg_loss = overall["avg_loss"] or 0
+                    win_rate = (wins / total * 100) if total > 0 else 0
+                    rr_ratio = abs(avg_win / avg_loss) if avg_loss != 0 else 0
+                    
+                    LOG.warning("")
+                    LOG.warning("=" * 80)
+                    LOG.warning("PnL ANALYSIS - MAXIMIZE PROFITABILITY")
+                    LOG.warning("=" * 80)
+                    LOG.warning(f"Total Trades: {total:,} | Win Rate: {win_rate:.1f}% ({wins}W/{losses}L)")
+                    LOG.warning(f"Total PnL: {total_pnl:+.3f}% | Avg PnL: {avg_pnl:+.3f}%")
+                    LOG.warning(f"Avg Win: {avg_win:+.3f}% | Avg Loss: {avg_loss:.3f}% | R:R: {rr_ratio:.2f}:1")
+                    
+                    # By strategy
+                    pnl_cursor.execute("""
+                        SELECT 
+                            strategy,
+                            COUNT(*) as total,
+                            SUM(CASE WHEN pnl_pct > 0 THEN 1 ELSE 0 END) as wins,
+                            SUM(pnl_pct) as total_pnl,
+                            AVG(pnl_pct) as avg_pnl
+                        FROM trades
+                        GROUP BY strategy
+                        ORDER BY total_pnl DESC
+                    """)
+                    LOG.warning("")
+                    LOG.warning("By Strategy:")
+                    for row in pnl_cursor.fetchall():
+                        s_wr = (row["wins"] / row["total"] * 100) if row["total"] > 0 else 0
+                        LOG.warning(f"  {row['strategy']:20} {row['total']:>4} trades | {s_wr:>5.1f}% WR | {row['total_pnl']:>+7.3f}% PnL | {row['avg_pnl']:>+6.3f}% avg")
+                    
+                    # Recent performance
+                    pnl_cursor.execute("""
+                        SELECT 
+                            COUNT(*) as total,
+                            SUM(CASE WHEN pnl_pct > 0 THEN 1 ELSE 0 END) as wins,
+                            SUM(pnl_pct) as total_pnl,
+                            AVG(pnl_pct) as avg_pnl
+                        FROM (SELECT pnl_pct FROM trades ORDER BY exit_time DESC LIMIT 50)
+                    """)
+                    recent = pnl_cursor.fetchone()
+                    if recent and recent["total"] > 0:
+                        r_wr = (recent["wins"] / recent["total"] * 100) if recent["total"] > 0 else 0
+                        LOG.warning("")
+                        LOG.warning(f"Last 50 trades: {recent['wins']}W/{recent['total']-recent['wins']}L ({r_wr:.1f}% WR) | {recent['total_pnl']:+.3f}% PnL | {recent['avg_pnl']:+.3f}% avg")
+                    
+                    LOG.warning("=" * 80)
+                
+                pnl_conn.close()
+            except Exception as e:
+                LOG.warning(f"[pnl_analysis] Failed to analyze PnL: {e}")
 
         if "price_history_by_strategy" in analysis:
             LOG.warning("")
@@ -540,7 +620,7 @@ async def main():
                     if os.path.exists(wal_path):
                         stats["wal_size_mb"] = round(os.path.getsize(wal_path) / 1024 / 1024, 2)
                     stats["total_size_mb"] = stats["file_size_mb"] + stats["wal_size_mb"]
-                    
+
                     # Backup directory stats
                     backup_dir = os.path.join(os.path.dirname(pnl_db_path), "backups")
                     backup_size = 0
