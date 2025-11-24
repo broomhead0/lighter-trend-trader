@@ -91,6 +91,16 @@ def _apply_env_overrides(cfg: Dict[str, Any]) -> None:
         cfg.setdefault("renko_ao", {})["dry_run"] = os.environ["RENKO_AO_DRY_RUN"].lower() == "true"
     if os.environ.get("RENKO_AO_MARKET"):
         cfg.setdefault("renko_ao", {})["market"] = os.environ["RENKO_AO_MARKET"]
+    if os.environ.get("RENKO_AO_MIN_DIVERGENCE_STRENGTH"):
+        cfg.setdefault("renko_ao", {})["min_divergence_strength"] = float(os.environ["RENKO_AO_MIN_DIVERGENCE_STRENGTH"])
+    if os.environ.get("RENKO_AO_MIN_AO_STRENGTH"):
+        cfg.setdefault("renko_ao", {})["min_ao_strength"] = float(os.environ["RENKO_AO_MIN_AO_STRENGTH"])
+    if os.environ.get("RENKO_AO_MIN_BRICKS_SINCE_DIVERGENCE"):
+        cfg.setdefault("renko_ao", {})["min_bricks_since_divergence"] = int(os.environ["RENKO_AO_MIN_BRICKS_SINCE_DIVERGENCE"])
+    if os.environ.get("RENKO_AO_OPTIMAL_ATR_MIN_BPS"):
+        cfg.setdefault("renko_ao", {})["optimal_atr_min_bps"] = float(os.environ["RENKO_AO_OPTIMAL_ATR_MIN_BPS"])
+    if os.environ.get("RENKO_AO_OPTIMAL_ATR_MAX_BPS"):
+        cfg.setdefault("renko_ao", {})["optimal_atr_max_bps"] = float(os.environ["RENKO_AO_OPTIMAL_ATR_MAX_BPS"])
 
     # Renko + AO per-strategy account config (optional, falls back to shared)
     if os.environ.get("RENKO_AO_ACCOUNT_INDEX"):
