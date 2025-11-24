@@ -121,11 +121,11 @@ class RenkoAOTrader:
 
         # Entry filters (reverted to stricter after bug fix - will relax if needed based on trade frequency)
         self.bb_enhancement_threshold = float(trader_cfg.get("bb_enhancement_threshold", 0.3))  # BB <0.3 or >0.7 (optional enhancement)
-        self.min_divergence_strength = float(trader_cfg.get("min_divergence_strength", 0.08))  # Divergence >0.08 (balanced selectivity)
-        self.min_ao_strength = float(trader_cfg.get("min_ao_strength", 0.15))  # AO >0.15 or <-0.15 (strong momentum)
-        self.min_bricks_since_divergence = int(trader_cfg.get("min_bricks_since_divergence", 4))  # At least 4 bricks since divergence (confirmation)
-        self.optimal_atr_min_bps = float(trader_cfg.get("optimal_atr_min_bps", 3.0))  # ATR 3-8 bps (optimal volatility range)
-        self.optimal_atr_max_bps = float(trader_cfg.get("optimal_atr_max_bps", 8.0))
+        self.min_divergence_strength = float(trader_cfg.get("min_divergence_strength", 0.05))  # Divergence ≥0.05 (relaxed for data collection)
+        self.min_ao_strength = float(trader_cfg.get("min_ao_strength", 0.10))  # AO ≥0.10 or ≤-0.10 (relaxed for data collection)
+        self.min_bricks_since_divergence = int(trader_cfg.get("min_bricks_since_divergence", 3))  # At least 3 bricks since divergence (relaxed from 4)
+        self.optimal_atr_min_bps = float(trader_cfg.get("optimal_atr_min_bps", 2.0))  # ATR 2-12 bps (relaxed from 3-8 for data collection)
+        self.optimal_atr_max_bps = float(trader_cfg.get("optimal_atr_max_bps", 12.0))
 
         # Risk management (ULTRA-SELECTIVE - wider stops for high-probability setups)
         self.take_profit_bps = float(trader_cfg.get("take_profit_bps", 14.0))  # Wider TP for high-probability setups
