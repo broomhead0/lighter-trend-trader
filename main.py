@@ -500,7 +500,12 @@ async def main():
     # Simple HTTP server for DB stats (ONE way to access DB)
     async def http_server():
         """Simple HTTP server that serves DB stats."""
-        from aiohttp import web
+        try:
+            from aiohttp import web
+        except ImportError as e:
+            LOG.error(f"❌ Failed to import aiohttp: {e}. HTTP server disabled.")
+            await stop_event.wait()  # Just wait for shutdown
+            return
 
         async def get_db_stats(request):
             """Return JSON with database stats."""
@@ -583,16 +588,20 @@ async def main():
         app.router.add_get("/db/stats", get_db_stats)
         app.router.add_get("/", get_db_stats)  # Also serve on root for convenience
 
-        runner = web.AppRunner(app)
-        await runner.setup()
-        port = int(os.environ.get("DB_STATS_PORT", "8080"))
-        site = web.TCPSite(runner, "0.0.0.0", port)
-        await site.start()
-        LOG.info(f"✅ DB stats server running on http://0.0.0.0:{port}/db/stats")
+        try:
+            runner = web.AppRunner(app)
+            await runner.setup()
+            port = int(os.environ.get("DB_STATS_PORT", "8080"))
+            site = web.TCPSite(runner, "0.0.0.0", port)
+            await site.start()
+            LOG.info(f"✅ DB stats server running on http://0.0.0.0:{port}/db/stats")
 
-        # Keep running until stop event
-        await stop_event.wait()
-        await runner.cleanup()
+            # Keep running until stop event
+            await stop_event.wait()
+            await runner.cleanup()
+        except Exception as e:
+            LOG.error(f"❌ HTTP server failed to start: {e}", exc_info=True)
+            await stop_event.wait()  # Wait for shutdown even if server failed
 
     # Run traders and price feed in parallel
     tasks = [price_feed.run(), stop_event.wait(), http_server()]
