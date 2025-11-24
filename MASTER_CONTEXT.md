@@ -297,6 +297,7 @@ railway variables --set "ACCOUNT_INDEX=281474976639501" \
 - **Backups**: `/data/backups/` (hourly, keeps last 10)
 - **Backup Config**: Enabled by default (`pnl_backup.enabled: true`)
 - **Query Tool**: `scripts/query_pnl.py` for analysis (see Performance Tracking section)
+- **HTTP Endpoint**: `http://railway-url:8080/db/stats` - Simple JSON endpoint for DB stats (ONE way to access DB)
 - **⚠️ CRITICAL FIX (2025-11-18):** Previously used `/tmp` which is NOT persistent on Railway. Now uses `/data` volume for true persistence.
 
 **Continuity Across Deploys (CRITICAL - 2025-11-18):**
@@ -686,15 +687,21 @@ railway logs | grep "indicators computed\|indicators:"
 
 ## Quick Reference Commands
 
+**⚠️ IMPORTANT: Always prevent hanging commands**
+- **ALWAYS** use `--tail N` with `railway logs` to limit output (e.g., `--tail 1000`)
+- **ALWAYS** use `head` or `grep | head` to further limit results
+- **NEVER** run unbounded `railway logs` without `--tail` (will hang indefinitely)
+- Use `timeout` command if available, or pipe to `head` to ensure commands exit
+
 ```bash
-# Check Railway logs
+# Check Railway logs (ALWAYS use --tail to prevent hanging)
 railway logs --tail 500
 
-# Check specific strategy
-railway logs | grep "\[mean_reversion\]"  # or "\[renko_ao\]"
+# Check specific strategy (with --tail to prevent hanging)
+railway logs --tail 1000 | grep "\[mean_reversion\]"  # or "\[renko_ao\]"
 
-# Export logs for analysis
-railway logs > logs.txt
+# Export logs for analysis (with --tail to prevent hanging)
+railway logs --tail 10000 > logs.txt
 python analyze_logs.py logs.txt
 
 # Check deployment status
@@ -711,6 +718,11 @@ python scripts/setup_api_key.py --eth-private-key 0x<key> --api-key-index 16
 
 # Test API key
 python scripts/test_order.py --account-index 281474976639501 --api-key-index 16 --api-key-private-key 0x<key>
+
+# Access DB stats (HTTP endpoint - ONE simple way to access DB)
+curl http://your-railway-url:8080/db/stats
+# Or use Railway's public URL if configured
+# Returns JSON with: file sizes, table counts, recent trades, strategy stats
 ```
 
 ## Quick Reference
