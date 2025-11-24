@@ -127,8 +127,8 @@ class BreakoutTrader:
         # Entry filters
         self.rsi_bullish_threshold = float(self.cfg.get("rsi_bullish_threshold", 60.0))  # RSI >60 for longs
         self.rsi_bearish_threshold = float(self.cfg.get("rsi_bearish_threshold", 40.0))  # RSI <40 for shorts
-        self.atr_min_bps = float(self.cfg.get("atr_min_bps", 3.0))  # Minimum volatility
-        self.atr_max_bps = float(self.cfg.get("atr_max_bps", 15.0))  # Maximum volatility
+        self.atr_min_bps = float(self.cfg.get("atr_min_bps", 3.0))  # Minimum volatility (avoid dead markets)
+        self.atr_max_bps = float(self.cfg.get("atr_max_bps", 200.0))  # Maximum volatility (breakouts need high vol, raised from 15.0)
         self.min_atr_expansion = float(self.cfg.get("min_atr_expansion", 1.1))  # ATR must be 10% higher than recent average
 
         # Risk management
