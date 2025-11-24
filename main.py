@@ -244,6 +244,9 @@ async def main():
 
     # Initialize backup if configured
     backup_config = cfg.get("pnl_backup") or {}
+    # Allow environment variable override for max_backups (reduce space usage)
+    if os.environ.get("PNL_BACKUP_MAX_BACKUPS"):
+        backup_config["max_backups"] = int(os.environ["PNL_BACKUP_MAX_BACKUPS"])
     if backup_config.get("enabled", False):
         from modules.pnl_backup import PnLBackup
         pnl_backup = PnLBackup(pnl_db_path, backup_config)
@@ -537,6 +540,20 @@ async def main():
                     if os.path.exists(wal_path):
                         stats["wal_size_mb"] = round(os.path.getsize(wal_path) / 1024 / 1024, 2)
                     stats["total_size_mb"] = stats["file_size_mb"] + stats["wal_size_mb"]
+                    
+                    # Backup directory stats
+                    backup_dir = os.path.join(os.path.dirname(pnl_db_path), "backups")
+                    backup_size = 0
+                    backup_count = 0
+                    if os.path.exists(backup_dir):
+                        for file in os.listdir(backup_dir):
+                            file_path = os.path.join(backup_dir, file)
+                            if os.path.isfile(file_path):
+                                backup_size += os.path.getsize(file_path)
+                                backup_count += 1
+                    stats["backup_count"] = backup_count
+                    stats["backup_size_mb"] = round(backup_size / 1024 / 1024, 2)
+                    stats["grand_total_mb"] = round((stats["total_size_mb"] + backup_size / 1024 / 1024), 2)
 
                     # Query database
                     conn = sqlite3.connect(pnl_db_path, check_same_thread=False)
